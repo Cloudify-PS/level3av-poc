@@ -1,0 +1,271 @@
+tosca_definitions_version: cloudify_dsl_1_3
+
+description: Private customer AWS VPC deployment
+
+imports:
+  - http://cloudify.co/spec/cloudify/6.3.0/types.yaml
+  - plugin:cloudify-aws-plugin
+
+inputs:
+
+  aws_region:
+    type: string
+    display_label: AWS Region
+    default: us-west-1
+    constraints:
+      - valid_values:
+        - us-east-1
+        - us-west-1
+        - ca-central-1
+        - eu-west-1
+
+  primary_availability_zone:
+    type: string
+    display_label: Primary availability zone
+    default: { concat: [ { get_input: aws_region }, 'a' ] }
+
+  secondary_availability_zone:
+    type: string
+    display_label: Primary availability zone
+    default: { concat: [ { get_input: aws_region }, 'a' ] }
+
+  vpc_cidr:
+    type: string
+    display_label: VPC CIDR
+    default: "10.0.0.0/16"
+
+  primary_public_subnet_cidr:
+    type: string
+    display_label: Primary public subnet CIDR
+    default: "10.0.1.0/24"
+
+  secondary_public_subnet_cidr:
+    type: string
+    display_label: Secondary public subnet CIDR
+    default: "10.0.2.0/24"
+
+  primary_private_subnet_cidr:
+    type: string
+    display_label: Primary private subnet CIDR
+    default: "10.0.11.0/24"
+
+  secondary_private_subnet_cidr:
+    type: string
+    display_label: Secondary private subnet CIDR
+    default: "10.0.12.0/24"
+
+  customer_name:
+    type: string
+    display_label: Customer Name
+    default: Acme
+
+dsl_definitions:
+  client_config: &client_config
+    aws_access_key_id: { get_secret: aws_access_key_id }
+    aws_secret_access_key: { get_secret: aws_secret_access_key }
+    region_name: { get_input: aws_region }
+
+node_templates:
+
+  # VPC
+  vpc:
+    type: cloudify.nodes.aws.ec2.Vpc
+    properties:
+      client_config: *client_config
+      resource_config:
+        CidrBlock: { get_input: vpc_cidr }
+        kwargs:
+          InstanceTenancy: default
+      Tags:
+        - Key: Name
+          Value: { concat: [ { get_input: customer_name }, "-vpc"] }
+
+  # IGW
+  internet_gateway:
+    type: cloudify.nodes.aws.ec2.InternetGateway
+    properties:
+      client_config: *client_config
+      Tags:
+        - Key: Name
+          Value: { concat: [ { get_input: customer_name }, "-igw"] }
+    relationships:
+    - type: cloudify.relationships.connected_to
+      target: vpc
+
+  # Public subnets
+  primary_public_subnet:
+    type: cloudify.nodes.aws.ec2.Subnet
+    properties:
+      client_config: *client_config
+      resource_config:
+        CidrBlock: { get_input: primary_public_subnet_cidr }
+        AvailabilityZone: { get_input: primary_availability_zone }
+      Tags:
+        - Key: Name
+          Value: { concat: [ { get_input: customer_name }, "-subnet-public-01"] }
+    relationships:
+    - type: cloudify.relationships.depends_on
+      target: vpc
+
+  secondary_public_subnet:
+    type: cloudify.nodes.aws.ec2.Subnet
+    properties:
+      client_config: *client_config
+      resource_config:
+        CidrBlock: { get_input: secondary_public_subnet_cidr }
+        AvailabilityZone: { get_input: secondary_availability_zone }
+      Tags:
+        - Key: Name
+          Value: { concat: [ { get_input: customer_name }, "-subnet-public-02"] }
+    relationships:
+    - type: cloudify.relationships.depends_on
+      target: vpc
+
+  # Private subnets
+  primary_private_subnet:
+    type: cloudify.nodes.aws.ec2.Subnet
+    properties:
+      client_config: *client_config
+      resource_config:
+        CidrBlock: { get_input: primary_private_subnet_cidr }
+        AvailabilityZone: { get_input: primary_availability_zone }
+      Tags:
+        - Key: Name
+          Value: { concat: [ { get_input: customer_name }, "-subnet-private-01"] }
+    relationships:
+    - type: cloudify.relationships.depends_on
+      target: vpc
+
+  secondary_private_subnet:
+    type: cloudify.nodes.aws.ec2.Subnet
+    properties:
+      client_config: *client_config
+      resource_config:
+        CidrBlock: { get_input: secondary_private_subnet_cidr }
+        AvailabilityZone: { get_input: secondary_availability_zone }
+      Tags:
+        - Key: Name
+          Value: { concat: [ { get_input: customer_name }, "-subnet-private-02"] }
+    relationships:
+    - type: cloudify.relationships.depends_on
+      target: vpc
+
+  # Public and private route tables
+  # TODO: tag below resources -public-route-table, -private-route-table
+  public_route_table:
+    type: cloudify.nodes.aws.ec2.RouteTable
+    properties:
+      client_config: *client_config
+    relationships:
+      - type: cloudify.relationships.contained_in
+        target: vpc
+      - type: cloudify.relationships.connected_to
+        target: primary_public_subnet
+      - type: cloudify.relationships.connected_to
+        target: secondary_public_subnet
+
+  private_route_table:
+    type: cloudify.nodes.aws.ec2.RouteTable
+    properties:
+      client_config: *client_config
+    relationships:
+      - type: cloudify.relationships.contained_in
+        target: vpc
+      - type: cloudify.relationships.connected_to
+        target: primary_private_subnet
+      - type: cloudify.relationships.connected_to
+        target: secondary_private_subnet
+
+  # TODO: Default SG
+
+  # Gateway management security group and rules
+  gateway_management_security_group:
+    type: cloudify.nodes.aws.ec2.SecurityGroup
+    properties:
+      client_config: *client_config
+      resource_config:
+        GroupName: { concat: [ { get_input: customer_name }, "-gateway-mgmt"] }
+        Description: Gateway management security group
+    relationships:
+      - type: cloudify.relationships.contained_in
+        target: vpc
+
+  gateway_management_ingress_rules:
+    type: cloudify.nodes.aws.ec2.SecurityGroupRuleIngress
+    properties:
+      client_config: *client_config
+      resource_config:
+        kwargs:
+          IpPermissions:
+            - IpProtocol: tcp
+              FromPort: 80
+              ToPort: 80
+              IpRanges:
+                - CidrIp: { get_input: vpc_cidr }
+            - IpProtocol: tcp
+              FromPort: 9000
+              ToPort: 9000
+              IpRanges:
+                - CidrIp: { get_input: vpc_cidr }
+            - IpProtocol: tcp
+              FromPort: 9001
+              ToPort: 9001
+              IpRanges:
+                - CidrIp: { get_input: vpc_cidr }
+            - IpProtocol: tcp
+              FromPort: 8443
+              ToPort: 8443
+              IpRanges:
+                - CidrIp: "0.0.0.0/0"
+            - IpProtocol: udp
+              FromPort: 8443
+              ToPort: 8443
+              IpRanges:
+                - CidrIp: "0.0.0.0/0"
+            - IpProtocol: udp
+              FromPort: 443
+              ToPort: 443
+              IpRanges:
+                - CidrIp: "0.0.0.0/0"
+            - IpProtocol: udp
+              FromPort: 51820
+              ToPort: 51820
+              IpRanges:
+                - CidrIp: "0.0.0.0/0"
+    relationships:
+      - type: cloudify.relationships.contained_in
+        target: gateway_management_security_group
+
+  # Gateway data security group and rules
+  gateway_data_security_group:
+    type: cloudify.nodes.aws.ec2.SecurityGroup
+    properties:
+      client_config: *client_config
+      resource_config:
+        GroupName: { concat: [ { get_input: customer_name }, "-gateway-data"] }
+        Description: Gateway data security group
+    relationships:
+      - type: cloudify.relationships.contained_in
+        target: vpc
+
+capabilities:
+
+  vpc_id:
+    description: ID of the deployed VPC
+    value: { get_attribute: [ vpc, aws_resource_id ] }
+
+  primary_public_subnet_id:
+    description: ID of the primary public subnet
+    value: { get_attribute: [ primary_public_subnet, aws_resource_id ] }
+
+  secondary_public_subnet_id:
+    description: ID of the secondary public subnet
+    value: { get_attribute: [ secondary_public_subnet, aws_resource_id ] }
+
+  primary_private_subnet_id:
+    description: ID of the primary private subnet
+    value: { get_attribute: [ primary_private_subnet, aws_resource_id ] }
+
+  secondary_private_subnet_id:
+    description: ID of the secondary private subnet
+    value: { get_attribute: [ secondary_private_subnet, aws_resource_id ] }
