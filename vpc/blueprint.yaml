@@ -11,52 +11,80 @@ inputs:
   aws_region:
     type: string
     display_label: AWS Region
+    description: The AWS region to create the VPC and resources in
     default: us-west-1
     constraints:
       - valid_values:
-        - us-east-1
-        - us-west-1
-        - ca-central-1
-        - eu-west-1
+          - us-east-1
+          - us-east-2
+          - us-west-1
+          - us-west-2
+          - eu-central-1
+          - eu-west-1
+          - eu-west-2
+          - eu-south-1
+          - eu-west-3
+          - eu-north-1
+          - af-south-1
+          - ap-east-1
+          - ap-south-1
+          - ap-northeast-3
+          - ap-northeast-2
+          - ap-southeast-1
+          - ap-southeast-2
+          - ap-northeast-1
+          - ca-central-1
+          - cn-north-1
+          - cn-northwest-1
+          - me-south-1
+          - sa-east-1
 
   primary_availability_zone:
     type: string
     display_label: Primary availability zone
+    description: The primary availability zone to deploy primary public and private subnets in
     default: { concat: [ { get_input: aws_region }, 'a' ] }
 
   secondary_availability_zone:
     type: string
     display_label: Primary availability zone
+    description: The secondary availability zone to deploy secondary public and private subnets in
     default: { concat: [ { get_input: aws_region }, 'a' ] }
 
   vpc_cidr:
     type: string
     display_label: VPC CIDR
+    description: The CIDR network for the VPC
     default: "10.0.0.0/16"
 
   primary_public_subnet_cidr:
     type: string
     display_label: Primary public subnet CIDR
+    description: The CIDR network for the primary public subnet
     default: "10.0.1.0/24"
 
   secondary_public_subnet_cidr:
     type: string
     display_label: Secondary public subnet CIDR
+    description: The CIDR network for the secondary public subnet
     default: "10.0.2.0/24"
 
   primary_private_subnet_cidr:
     type: string
     display_label: Primary private subnet CIDR
+    description: The CIDR network for the primary private subnet
     default: "10.0.11.0/24"
 
   secondary_private_subnet_cidr:
     type: string
     display_label: Secondary private subnet CIDR
+    description: The CIDR network for the secondary private subnet
     default: "10.0.12.0/24"
 
   customer_name:
     type: string
     display_label: Customer Name
+    description: The name of the customer. Used to tag resources in AWS.
     default: Acme
 
 dsl_definitions:
