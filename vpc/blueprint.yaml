@@ -47,9 +47,9 @@ inputs:
 
   secondary_availability_zone:
     type: string
-    display_label: Primary availability zone
+    display_label: Secondary availability zone
     description: The secondary availability zone to deploy secondary public and private subnets in
-    default: { concat: [ { get_input: aws_region }, 'a' ] }
+    default: { concat: [ { get_input: aws_region }, 'b' ] }
 
   vpc_cidr:
     type: string
@@ -179,11 +179,13 @@ node_templates:
       target: vpc
 
   # Public and private route tables
-  # TODO: tag below resources -public-route-table, -private-route-table
   public_route_table:
     type: cloudify.nodes.aws.ec2.RouteTable
     properties:
       client_config: *client_config
+      Tags:
+        - Key: Name
+          Value: { concat: [ { get_input: customer_name }, "-public-route-table"] }
     relationships:
       - type: cloudify.relationships.contained_in
         target: vpc
@@ -196,6 +198,9 @@ node_templates:
     type: cloudify.nodes.aws.ec2.RouteTable
     properties:
       client_config: *client_config
+      Tags:
+        - Key: Name
+          Value: { concat: [ { get_input: customer_name }, "-private-route-table"] }
     relationships:
       - type: cloudify.relationships.contained_in
         target: vpc
