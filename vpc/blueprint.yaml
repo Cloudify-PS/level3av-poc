@@ -186,16 +186,6 @@ node_templates:
       Tags:
         - Key: Name
           Value: { concat: [ { get_input: customer_name }, "-public-route-table"] }
-    interfaces:
-      cloudify.interfaces.lifecycle:
-        prestop:
-          implementation: scripts/detach_all.py
-          executor: central_deployment_agent
-          inputs:
-            aws_access_key_id: { get_secret: aws_access_key_id }
-            aws_secret_access_key: { get_secret: aws_secret_access_key }
-            region: { get_input: aws_region }
-            route_table_id: { get_attribute: [public_route_table, aws_resource_id] }
     relationships:
       - type: cloudify.relationships.contained_in
         target: vpc
@@ -211,16 +201,6 @@ node_templates:
       Tags:
         - Key: Name
           Value: { concat: [ { get_input: customer_name }, "-private-route-table"] }
-    interfaces:
-      cloudify.interfaces.lifecycle:
-        prestop:
-          implementation: scripts/detach_all.py
-          executor: central_deployment_agent
-          inputs:
-            aws_access_key_id: { get_secret: aws_access_key_id }
-            aws_secret_access_key: { get_secret: aws_secret_access_key }
-            region: { get_input: aws_region }
-            route_table_id: { get_attribute: [private_route_table, aws_resource_id] }
     relationships:
       - type: cloudify.relationships.contained_in
         target: vpc
@@ -228,41 +208,6 @@ node_templates:
         target: primary_private_subnet
       - type: cloudify.relationships.connected_to
         target: secondary_private_subnet
-
-  # Default security group and rules
-  default_security_group:
-    type: cloudify.nodes.Root
-    interfaces:
-      cloudify.interfaces.lifecycle:
-        start:
-          implementation: scripts/get_default_sg.py
-          executor: central_deployment_agent
-          inputs:
-            aws_access_key_id: { get_secret: aws_access_key_id }
-            aws_secret_access_key: { get_secret: aws_secret_access_key }
-            region: { get_input: aws_region }
-            vpc_id: { get_attribute: [vpc, aws_resource_id] }
-            sg_name: { concat: [ { get_input: customer_name }, "-default-sg"] }
-    relationships:
-      - type: cloudify.relationships.contained_in
-        target: vpc
-
-  default_sg_ingress_rules:
-    type: cloudify.nodes.aws.ec2.SecurityGroupRuleIngress
-    properties:
-      client_config: *client_config
-      resource_config:
-        kwargs:
-          GroupId: { get_attribute: [default_security_group, default_sg_id] }
-          IpPermissions:
-            - IpProtocol: '-1'
-              FromPort: 0
-              ToPort: 0
-              IpRanges:
-                - CidrIp: "0.0.0.0/0"
-    relationships:
-      - type: cloudify.relationships.depends_on
-        target: default_security_group
 
   # Gateway management security group and rules
   gateway_management_security_group:
