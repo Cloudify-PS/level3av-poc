@@ -66,6 +66,7 @@ node_templates:
       resource_config:
         name: zabbix
         chart: celtic/zabbix
+        values_file: values.yaml
         set_values:
           - name: "zabbixserver.DB_SERVER_HOST"
             value: { get_input: database_endpoint }
