@@ -1,12 +1,8 @@
 #!/usr/bin/env python
 
+import boto3
 from cloudify import ctx
 from cloudify.state import ctx_parameters as inputs
-# import subprocess
-# import sys
-
-# subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'boto3'])
-import boto3
 
 
 ec2_client = boto3.client('ec2',
