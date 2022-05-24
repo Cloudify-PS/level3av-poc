@@ -1,0 +1,7 @@
+zabbixserver:
+  replicaCount: 3
+  extraEnv:
+    - name: "ZBX_AUTONODEADDRESS"
+      value: "fqdn"
+    - name: "ZBX_AUTOHANODENAME"
+      value: "fqdn"
