@@ -132,6 +132,9 @@ node_templates:
         install_method: init_script
         user: ec2-user
         network: external
+        extra:
+          distro: centos
+          distro_codename: 8
       resource_config:
         InstanceType: { get_input: instance_type }
         ImageId: { get_input: ami_id }
