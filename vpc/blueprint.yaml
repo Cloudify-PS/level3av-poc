@@ -107,6 +107,14 @@ node_templates:
       Tags:
         - Key: Name
           Value: { concat: [ { get_input: customer_name }, "-vpc"] }
+    interfaces:
+      cloudify.interfaces.lifecycle:
+        configure:
+          implementation: aws.cloudify_aws.ec2.resources.vpc.create
+          inputs:
+            modify_vpc_attribute_args:
+              EnableDnsHostnames:
+                Value: True
 
   # IGW
   internet_gateway:
@@ -131,6 +139,14 @@ node_templates:
       Tags:
         - Key: Name
           Value: { concat: [ { get_input: customer_name }, "-subnet-public-01"] }
+    interfaces:
+      cloudify.interfaces.lifecycle:
+        poststart:
+          implementation: aws.cloudify_aws.ec2.resources.subnet.modify_subnet_attribute
+          inputs:
+            resource_config:
+              MapPublicIpOnLaunch:
+                Value: true
     relationships:
     - type: cloudify.relationships.depends_on
       target: vpc
@@ -145,6 +161,14 @@ node_templates:
       Tags:
         - Key: Name
           Value: { concat: [ { get_input: customer_name }, "-subnet-public-02"] }
+    interfaces:
+      cloudify.interfaces.lifecycle:
+        poststart:
+          implementation: aws.cloudify_aws.ec2.resources.subnet.modify_subnet_attribute
+          inputs:
+            resource_config:
+              MapPublicIpOnLaunch:
+                Value: true
     relationships:
     - type: cloudify.relationships.depends_on
       target: vpc
@@ -360,3 +384,11 @@ capabilities:
   secondary_private_subnet_id:
     description: ID of the secondary private subnet
     value: { get_attribute: [ secondary_private_subnet, aws_resource_id ] }
+
+  gateway_management_security_group_id:
+    description: ID of the gateway management security group
+    value: { get_attribute: [ gateway_management_security_group, aws_resource_id ] }
+
+  gateway_data_security_group_id:
+    description: ID of the gateway data security group
+    value: { get_attribute: [ gateway_data_security_group, aws_resource_id ] }

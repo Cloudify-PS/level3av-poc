@@ -1,0 +1,282 @@
+tosca_definitions_version: cloudify_dsl_1_3
+
+description: Customer AWS EKS deployment
+
+imports:
+  - http://cloudify.co/spec/cloudify/6.3.0/types.yaml
+  - plugin:cloudify-aws-plugin
+  - plugin:cloudify-kubernetes-plugin
+  - plugin:cloudify-utilities-plugin
+
+inputs:
+
+  customer_name:
+    type: string
+    display_label: Customer Name
+    description: The name of the customer. Used to tag resources in AWS.
+    default: Acme
+
+  aws_region:
+    type: string
+    display_label: AWS Region
+    description: The AWS region to create the EKS and resources in
+    default: us-west-1
+    constraints:
+      - valid_values:
+          - us-east-1
+          - us-east-2
+          - us-west-1
+          - us-west-2
+          - eu-central-1
+          - eu-west-1
+          - eu-west-2
+          - eu-south-1
+          - eu-west-3
+          - eu-north-1
+          - af-south-1
+          - ap-east-1
+          - ap-south-1
+          - ap-northeast-3
+          - ap-northeast-2
+          - ap-southeast-1
+          - ap-southeast-2
+          - ap-northeast-1
+          - ca-central-1
+          - cn-north-1
+          - cn-northwest-1
+          - me-south-1
+          - sa-east-1
+
+  eks_cluster_name:
+    type: string
+    display_label: EKS Cluster Name
+    description: The name of EKS cluster to be created
+    default: { concat: [ { get_input: customer_name }, "-cluster"] }
+
+  eks_nodegroup_name:
+    type: string
+    display_label: EKS NodeGroup Name
+    description: The name of EKS NodeGroup to be created
+    default: { concat: [ { get_input: customer_name }, "-ng"] }
+
+  kubernetes_version:
+    type: string
+    display_label: Kubernetes Version
+    description: The version of Kubernetes used for EKS cluster
+    default: '1.21'
+
+  service_account_name:
+    type: string
+    display_label: EKS Service Account Name
+    description: The name of EKS Cluster Service Account to be created
+    default: { string_lower: { concat: [ { get_input: customer_name }, "-sa"] } }
+
+  service_account_namespace:
+    type: string
+    display_label: EKS Service Account Namespace
+    description: The name of EKS Cluster Service Account namespace
+    default: default
+
+  private_subnet_01_id:
+    type: string
+    display_label: Private Subnet 01 AWS ID
+    description: AWS Resource ID of the Private Subnet 01
+
+  private_subnet_02_id:
+    type: string
+    display_label: Private Subnet 02 AWS ID
+    description: AWS Resource ID of the Private Subnet 02
+
+  public_subnet_01_id:
+    type: string
+    display_label: Public Subnet 01 AWS ID
+    description: AWS Resource ID of the Public Subnet 01
+
+  public_subnet_02_id:
+    type: string
+    display_label: Public Subnet 02 AWS ID
+    description: AWS Resource ID of the Public Subnet 02
+
+  security_group_id:
+    type: string
+    display_label: Security Group AWS ID
+    description: AWS Resource ID of the Security Group
+
+
+dsl_definitions:
+  client_config: &client_config
+    aws_access_key_id: { get_secret: aws_access_key_id }
+    aws_secret_access_key: { get_secret: aws_secret_access_key }
+    region_name: { get_input: aws_region }
+
+node_templates:
+
+  agent_key:
+      type: cloudify.keys.nodes.RSAKey
+      properties:
+        resource_config:
+          key_name: { concat: [{ get_input: eks_cluster_name }, '-ssh_key' ] }
+          openssh_format: true
+        use_secret_store: true
+        use_secrets_if_exist: true
+      interfaces:
+        cloudify.interfaces.lifecycle:
+          create:
+            implementation: keys.cloudify_ssh_key.operations.create
+            inputs:
+              store_private_key_material: true
+
+  keypair:
+    type: cloudify.nodes.aws.ec2.Keypair
+    properties:
+      client_config: *client_config
+      cloudify_tagging: false
+      resource_config:
+        KeyName: { concat: [{ get_input: eks_cluster_name }, '-ssh_key' ] }
+        PublicKeyMaterial: { get_attribute: [agent_key, public_key_export] }
+    relationships:
+      - type: cloudify.relationships.depends_on
+        target: agent_key
+
+  eks_service_iam_role:
+    type: cloudify.nodes.aws.iam.Role
+    properties:
+      resource_id: { concat: [ 'eks_service_iam_role-', { get_input: eks_cluster_name } ] }
+      client_config: *client_config
+      resource_config:
+        RoleName: { concat: [ 'eks_role-', { get_input: eks_cluster_name } ] }
+        Path: '/'
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: 'eks.amazonaws.com'
+              Action: 'sts:AssumeRole'
+    interfaces:
+      cloudify.interfaces.lifecycle:
+        create:
+          implementation: aws.cloudify_aws.iam.resources.role.create
+          inputs:
+            modify_role_attribute_args:
+              - PolicyArn: arn:aws:iam::aws:policy/AmazonEKSServicePolicy
+              - PolicyArn: arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
+
+  eks_nodegroup_iam_role:
+    type: cloudify.nodes.aws.iam.Role
+    properties:
+      resource_id: { concat: [ 'eks_nodegroup_iam_role-', { get_input: eks_cluster_name } ] }
+      client_config: *client_config
+      resource_config:
+        RoleName: { concat: [ 'eks_nodegroup_role-', { get_input: eks_cluster_name } ] }
+        Path: '/'
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Principal:
+              Service: 'ec2.amazonaws.com'
+            Action: 'sts:AssumeRole'
+    interfaces:
+      cloudify.interfaces.lifecycle:
+        create:
+          implementation: aws.cloudify_aws.iam.resources.role.create
+          inputs:
+            modify_role_attribute_args:
+              - PolicyArn: arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
+              - PolicyArn: arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
+              - PolicyArn: arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+
+  eks_cluster:
+    type: cloudify.nodes.aws.eks.Cluster
+    properties:
+      resource_config:
+        kwargs:
+          name: { get_input: eks_cluster_name }
+          version: { get_input: kubernetes_version }
+          roleArn: { get_attribute: [ eks_service_iam_role, aws_resource_arn ] }
+          resourcesVpcConfig:
+            subnetIds:
+              - { get_input: private_subnet_01_id }
+              - { get_input: private_subnet_02_id }
+              - { get_input: public_subnet_01_id }
+              - { get_input: public_subnet_02_id }
+            securityGroupIds:
+              - { get_input: security_group_id }
+            endpointPublicAccess: True
+            endpointPrivateAccess: False
+      client_config: *client_config
+      store_kube_config_in_runtime: True
+    relationships:
+      - type: cloudify.relationships.depends_on
+        target: eks_service_iam_role
+
+  eks_node_group:
+    type: cloudify.nodes.aws.eks.NodeGroup
+    properties:
+      resource_config:
+        kwargs:
+          clusterName: { get_input: eks_cluster_name }
+          nodegroupName: { get_input: eks_nodegroup_name }
+          scalingConfig:
+            minSize: 1
+            maxSize: 1
+            desiredSize: 1
+          diskSize: 20
+          subnets:
+              - { get_input: private_subnet_01_id }
+              - { get_input: private_subnet_02_id }
+              - { get_input: public_subnet_01_id }
+              - { get_input: public_subnet_02_id }
+          instanceTypes:
+            - t3.medium
+          amiType: AL2_x86_64
+          nodeRole: { get_attribute: [ eks_nodegroup_iam_role, aws_resource_arn ] }
+          remoteAccess:
+            ec2SshKey: { concat: [{ get_input: eks_cluster_name }, '-ssh_key' ] }
+      client_config: *client_config
+    relationships:
+      - type: cloudify.relationships.depends_on
+        target: eks_nodegroup_iam_role
+      - type: cloudify.relationships.depends_on
+        target: eks_cluster
+      - type: cloudify.relationships.depends_on
+        target: keypair
+
+  kubernetes_master:
+    type: cloudify.kubernetes.nodes.Master
+    properties:
+      configuration: &kubernetes_master_configuration
+        file_content: { get_attribute: [ eks_cluster, kubeconf ] }
+    relationships:
+      - type: cloudify.relationships.depends_on
+        target: eks_node_group
+      - type: cloudify.relationships.aws.eks.connected_to_eks_cluster
+        target: eks_cluster
+
+  service_account:
+    type: cloudify.kubernetes.resources.ServiceAccount
+    properties:
+      client_config:
+        configuration: *kubernetes_master_configuration
+      definition:
+        apiVersion: v1
+        kind: ServiceAccount
+        metadata:
+          name: { get_input: service_account_name }
+          namespace: { get_input: service_account_namespace }
+      options:
+        namespace: { get_input: service_account_namespace }
+    relationships:
+      - type: cloudify.relationships.depends_on
+        target: kubernetes_master
+      - type: cloudify.relationships.aws.eks.connected_to_eks_cluster
+        target: eks_cluster
+
+capabilities:
+
+  endpoint:
+    value: { get_attribute: [eks_cluster, kubeconf, clusters, 0, cluster, server ] }
+
+  connection_details:
+    value: *kubernetes_master_configuration
