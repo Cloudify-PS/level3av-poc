@@ -49,7 +49,7 @@ inputs:
     type: string
     display_label: Secondary availability zone
     description: The secondary availability zone to deploy secondary public and private subnets in
-    default: { concat: [ { get_input: aws_region }, 'b' ] }
+    default: { concat: [ { get_input: aws_region }, 'c' ] }
 
   vpc_cidr:
     type: string
@@ -178,6 +178,34 @@ node_templates:
     - type: cloudify.relationships.depends_on
       target: vpc
 
+  # NAT Gateway
+  nat_gateway_eip:
+   type: cloudify.nodes.aws.ec2.ElasticIP
+   properties:
+      client_config: *client_config
+      resource_config:
+        kwargs:
+          Domain: 'vpc'
+      Tags:
+        - Key: Name
+          Value: { concat: [ { get_input: customer_name }, "-nat-gw-eip"] }
+
+  nat_gateway:
+    type: cloudify.nodes.aws.ec2.NATGateway
+    properties:
+      client_config: *client_config
+      resource_config:
+        kwargs:
+          ConnectivityType: public
+      Tags:
+        - Key: Name
+          Value: { concat: [ { get_input: customer_name }, "-nat-gw"] }
+    relationships:
+      - type: cloudify.relationships.depends_on
+        target: primary_public_subnet
+      - type: cloudify.relationships.depends_on
+        target: nat_gateway_eip
+
   # Public and private route tables
   public_route_table:
     type: cloudify.nodes.aws.ec2.RouteTable
@@ -193,6 +221,32 @@ node_templates:
         target: primary_public_subnet
       - type: cloudify.relationships.connected_to
         target: secondary_public_subnet
+
+  public_igw_route:
+    type: cloudify.nodes.aws.ec2.Route
+    properties:
+      client_config: *client_config
+      resource_config:
+        kwargs:
+          DestinationCidrBlock: '0.0.0.0/0'
+    relationships:
+      - type: cloudify.relationships.contained_in
+        target: public_route_table
+      - type: cloudify.relationships.connected_to
+        target: internet_gateway
+
+  private_nat_gw_route:
+    type: cloudify.nodes.aws.ec2.Route
+    properties:
+      client_config: *client_config
+      resource_config:
+        kwargs:
+          DestinationCidrBlock: '0.0.0.0/0'
+    relationships:
+      - type: cloudify.relationships.contained_in
+        target: private_route_table
+      - type: cloudify.relationships.connected_to
+        target: nat_gateway
 
   private_route_table:
     type: cloudify.nodes.aws.ec2.RouteTable
