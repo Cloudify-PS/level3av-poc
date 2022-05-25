@@ -1,0 +1,152 @@
+tosca_definitions_version: cloudify_dsl_1_3
+
+description: Crestron VC4 instance running on AlmaLinux
+
+imports:
+  - https://cloudify.co/spec/cloudify/6.3.0/types.yaml
+  - plugin:cloudify-aws-plugin
+  - plugin:cloudify-utilities-plugin
+
+inputs:
+
+  aws_region:
+    type: string
+    display_label: AWS Region
+    description: The AWS region to create the Crestron instance in
+    default: us-west-1
+    constraints:
+      - valid_values:
+          - us-east-1
+          - us-east-2
+          - us-west-1
+          - us-west-2
+          - eu-central-1
+          - eu-west-1
+          - eu-west-2
+          - eu-south-1
+          - eu-west-3
+          - eu-north-1
+          - af-south-1
+          - ap-east-1
+          - ap-south-1
+          - ap-northeast-3
+          - ap-northeast-2
+          - ap-southeast-1
+          - ap-southeast-2
+          - ap-northeast-1
+          - ca-central-1
+          - cn-north-1
+          - cn-northwest-1
+          - me-south-1
+          - sa-east-1
+
+  customer_name:
+    type: string
+    display_label: Customer Name
+    description: The name of the customer. Used to tag resources in AWS.
+    default: Acme
+
+  instance_type:
+    type: string
+    display_label: Instance Size
+    description: Instance size to deploy
+    default: t3.small
+    constraints:
+      - valid_values:
+        - t3.micro
+        - t3.small
+        - t3.medium
+        - t3.large  
+
+  image_id:
+    type: dict
+    description: Map between region and AMI. Used to select the correct AMI based on the selected region.
+    default:
+      us-east-1: ami-00cf249161bc21a71
+      us-east-2: ami-0c1fbef3b864e6e95
+      us-west-1: ami-022c799ffdedfc05b
+      us-west-2: ami-05bb52bb5937accfe
+      eu-central-1: ami-09fb665bbc486902e
+      eu-west-1: ami-02ab0126115dd05cf
+      eu-west-2: ami-0ce15bfb496be9059
+      eu-south-1: ami-0c12cee2eac625085
+      eu-west-3: ami-0ffcfdfd70c0762ec
+      eu-north-1: ami-01d058a3ef74c3366
+      af-south-1: ami-03101d64884ff9705
+      ap-east-1: ami-0cb89776705f69b2e
+      ap-south-1: ami-03d32b33fd993411b
+      ap-northeast-3: ami-01184a80d649091d8
+      ap-northeast-2: ami-09e6b7a3b88bc9889
+      ap-southeast-1: ami-03292af505f184a36
+      ap-southeast-2: ami-04ce4552e468d870d
+      ap-northeast-1: ami-004daf3add9941dbf
+      ca-central-1: ami-03f9f1c20c7f168e3
+      me-south-1: ami-0cdf6af4fd060060f
+      sa-east-1: ami-012bb194cdf068648
+    hidden: true
+
+  ami_id:
+    type: string
+    display_label: AMI ID
+    description: The AMI ID to use for the server deployment. Defaults to the AlmaLinux OS 8.6.20220513 image for the selected region.
+    default: { get_input: [ image_id, { get_input: aws_region } ] }
+
+  subnet_id:
+    type: string
+    display_label: Subnet ID
+    description: Subnet to deploy VC4 instance into
+
+dsl_definitions:
+  client_config: &client_config
+    aws_access_key_id: { get_secret: aws_access_key_id }
+    aws_secret_access_key: { get_secret: aws_secret_access_key }
+    region_name: { get_input: aws_region }
+
+node_templates:
+
+  ssh_key:
+    type: cloudify.keys.nodes.RSAKey
+    properties:
+      resource_config:
+        key_name: { concat: [ { get_input: customer_name }, "-vc4-key"] }
+        openssh_format: true
+      use_secret_store: true
+      use_secrets_if_exist: true
+
+  ec2_keypair:
+    type: cloudify.nodes.aws.ec2.Keypair
+    properties:
+      client_config: *client_config
+      resource_config:
+        KeyName: { concat: [ { get_input: customer_name }, "-vc4-key" ] }
+        PublicKeyMaterial: { get_attribute: [ ssh_key, public_key_export ] }
+    relationships:
+      - type: cloudify.relationships.depends_on
+        target: ssh_key
+
+  vc4_server:
+    type: cloudify.nodes.aws.ec2.Instances
+    properties:
+      client_config: *client_config
+      agent_config:
+        install_method: init_script
+        user: ec2-user
+        network: external
+      resource_config:
+        InstanceType: { get_input: instance_type }
+        ImageId: { get_input: ami_id }
+        kwargs:
+          SubnetId: { get_input: subnet_id }
+          KeyName: { concat: [ { get_input: customer_name }, "-vc4-key" ] }
+      use_public_ip: true
+      Tags:
+        - Key: Name
+          Value: { concat: [ { get_input: customer_name }, "-vc4-instance"] }
+    relationships:
+      - type: cloudify.relationships.depends_on
+        target: ec2_keypair
+
+capabilities:
+
+  ami_id:
+    value: { get_input: ami_id }
