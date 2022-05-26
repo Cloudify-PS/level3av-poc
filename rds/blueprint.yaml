@@ -1,0 +1,269 @@
+tosca_definitions_version: cloudify_dsl_1_3
+
+description: Customer AWS RDS deployment
+
+imports:
+  - http://cloudify.co/spec/cloudify/6.3.0/types.yaml
+  - plugin:cloudify-aws-plugin
+
+inputs:
+
+  customer_name:
+    type: string
+    display_label: Customer Name
+    description: The name of the customer. Used to tag resources in AWS.
+    default: Acme
+
+  aws_region:
+    type: string
+    display_label: AWS Region
+    description: The AWS region to create the EKS and resources in
+    default: us-west-1
+    constraints:
+      - valid_values:
+          - us-east-1
+          - us-east-2
+          - us-west-1
+          - us-west-2
+          - eu-central-1
+          - eu-west-1
+          - eu-west-2
+          - eu-south-1
+          - eu-west-3
+          - eu-north-1
+          - af-south-1
+          - ap-east-1
+          - ap-south-1
+          - ap-northeast-3
+          - ap-northeast-2
+          - ap-southeast-1
+          - ap-southeast-2
+          - ap-northeast-1
+          - ca-central-1
+          - cn-north-1
+          - cn-northwest-1
+          - me-south-1
+          - sa-east-1
+
+  rds_name:
+    type: string
+    display_label: RDS Instance Name
+    description: >
+      The name of RDS instance to be created.
+      Identifiers must begin with a letter; must contain only ASCII
+      letters, digits, and hyphens; and must not end with a hyphen or
+      contain two consecutive hyphens.
+    default: { concat: [ { get_input: customer_name }, "Rds"] }
+
+  vpc_id:
+    type: string
+    display_label: VPC Resource ID
+    description: Resource ID of VPC to be used
+
+  vpc_subnet_1_cidr:
+    type: string
+    display_label: Subnet 1 CIDR
+    description: CIDR of Subnet 1
+    default: "10.0.3.0/24"
+
+  vpc_subnet_1_az:
+    type: string
+    display_label: Subnet 1 Availability Zone
+    description: Availability Zone of Subnet 1
+    default: { concat: [ { get_input: aws_region }, "a"] }
+
+  vpc_subnet_2_cidr:
+    type: string
+    display_label: Subnet 2 CIDR
+    description: CIDR of Subnet 2
+    default: "10.0.4.0/24"
+
+  vpc_subnet_2_az:
+    type: string
+    display_label: Subnet 2 Availability Zone
+    description: Availability Zone of Subnet 2
+    default: { concat: [ { get_input: aws_region }, "c"] }
+
+  rds_availability_zone:
+    type: string
+    display_label: RDS Availability Zone
+    description: Availability Zone to create RDS in
+    default: { concat: [ { get_input: aws_region }, "a"] }
+
+  rds_storage:
+    type: string
+    display_label: RDS Storage
+    description: The storage of RDS instance in GiB
+    default: 20
+
+  rds_master_username:
+    type: string
+    display_label: RDS Master Username
+    description: Master User name of RDS instance database
+    default: root
+
+  rds_master_user_password:
+    type: string
+    display_label: RDS Master User Password
+    description: Master User password of RDS instance database
+    default: $tR0ng-p4s$w0rD
+
+dsl_definitions:
+  client_config: &client_config
+    aws_access_key_id: { get_secret: aws_access_key_id }
+    aws_secret_access_key: { get_secret: aws_secret_access_key }
+    region_name: { get_input: aws_region }
+
+node_templates:
+
+  rds_vpc:
+    type: cloudify.nodes.aws.ec2.Vpc
+    properties:
+      use_external_resource: true
+      resource_id: { get_input: vpc_id }
+      client_config: *client_config
+      resource_config:
+        CidrBlock: ''
+
+  rds_subnet_1:
+    type: cloudify.nodes.aws.ec2.Subnet
+    properties:
+      client_config: *client_config
+      resource_config:
+        CidrBlock: { get_input: vpc_subnet_1_cidr }
+        AvailabilityZone: { get_input: vpc_subnet_1_az }
+      Tags:
+        - Key: Name
+          Value: { concat: [ { get_input: customer_name }, "-subnet-rds-1"] }
+    interfaces:
+      cloudify.interfaces.lifecycle:
+        poststart:
+          implementation: aws.cloudify_aws.ec2.resources.subnet.modify_subnet_attribute
+          inputs:
+            resource_config:
+              MapPublicIpOnLaunch:
+                Value: true
+    relationships:
+      - type: cloudify.relationships.depends_on
+        target: rds_vpc
+
+  rds_subnet_2:
+    type: cloudify.nodes.aws.ec2.Subnet
+    properties:
+      client_config: *client_config
+      resource_config:
+        CidrBlock: { get_input: vpc_subnet_2_cidr }
+        AvailabilityZone: { get_input: vpc_subnet_2_az }
+      Tags:
+        - Key: Name
+          Value: { concat: [ { get_input: customer_name }, "-subnet-rds-2"] }
+    interfaces:
+      cloudify.interfaces.lifecycle:
+        poststart:
+          implementation: aws.cloudify_aws.ec2.resources.subnet.modify_subnet_attribute
+          inputs:
+            resource_config:
+              MapPublicIpOnLaunch:
+                Value: true
+    relationships:
+      - type: cloudify.relationships.depends_on
+        target: rds_vpc
+
+  rds_subnet_group:
+    type: cloudify.nodes.aws.rds.SubnetGroup
+    properties:
+      client_config: *client_config
+      resource_config:
+        kwargs:
+          DBSubnetGroupName: { concat: [ { get_input: customer_name }, "-subnet-group"] }
+          DBSubnetGroupDescription: Subnet Group for RDS MySQL
+          SubnetIds:
+            - { get_attribute: [rds_subnet_1, aws_resource_id] }
+            - { get_attribute: [rds_subnet_2, aws_resource_id] }
+          Tags:
+            - Key: Name
+              Value: { concat: [ { get_input: customer_name }, "-subnet-group"] }
+    relationships:
+      - type: cloudify.relationships.depends_on
+        target: rds_subnet_1
+      - type: cloudify.relationships.depends_on
+        target: rds_subnet_2
+
+  rds_security_group:
+    type: cloudify.nodes.aws.ec2.SecurityGroup
+    properties:
+      client_config: *client_config
+      resource_config:
+        GroupName: { concat: [ { get_input: customer_name }, "-rds"] }
+        Description: RDS instance security group
+      Tags:
+        - Key: Name
+          Value: { concat: [ { get_input: customer_name }, "-rds"] }
+    relationships:
+      - type: cloudify.relationships.contained_in
+        target: rds_vpc
+
+  rds_security_group_ingress_rules:
+    type: cloudify.nodes.aws.ec2.SecurityGroupRuleIngress
+    properties:
+      client_config: *client_config
+      resource_config:
+        kwargs:
+          IpPermissions:
+            - IpProtocol: tcp
+              FromPort: 80
+              ToPort: 80
+              IpRanges:
+                - CidrIp: { get_attribute: [rds_vpc, expected_configuration, CidrBlock] }
+            - IpProtocol: tcp
+              FromPort: 443
+              ToPort: 443
+              IpRanges:
+                - CidrIp: { get_attribute: [rds_vpc, expected_configuration, CidrBlock] }
+            - IpProtocol: tcp
+              FromPort: 22
+              ToPort: 22
+              IpRanges:
+                - CidrIp: { get_attribute: [rds_vpc, expected_configuration, CidrBlock] }
+            - IpProtocol: icmp
+              FromPort: -1
+              ToPort: -1
+              IpRanges:
+                - CidrIp: "0.0.0.0/0"
+    relationships:
+      - type: cloudify.relationships.contained_in
+        target: rds_security_group
+
+  rds_instance:
+    type: cloudify.nodes.aws.rds.Instance
+    properties:
+      resource_id: { get_input: rds_name }
+      client_config: *client_config
+    interfaces:
+      cloudify.interfaces.lifecycle:
+        create:
+          inputs:
+            resource_config:
+              DBName: { get_input: rds_name }
+              DBInstanceClass: db.t2.small
+              Engine: mysql
+              EngineVersion: 8.0.26
+              AvailabilityZone: { get_input: rds_availability_zone }
+              StorageType: gp2
+              AllocatedStorage: { get_input: rds_storage }
+              MasterUsername: { get_input: rds_master_username }
+              MasterUserPassword: { get_input: rds_master_user_password }
+              DBSubnetGroupName: { get_attribute: [rds_subnet_group, resource_config, DBSubnetGroupName] }
+    relationships:
+    - type: cloudify.relationships.depends_on
+      target: rds_subnet_group
+    - type: cloudify.relationships.aws.rds.instance.connected_to
+      target: rds_security_group
+
+capabilities:
+
+  endpoint_address:
+    value: { get_attribute: [rds_instance, Endpoint, Address] }
+
+  endpoint_port:
+    value: { get_attribute: [rds_instance, Endpoint, Port] }
