@@ -1,0 +1,301 @@
+tosca_definitions_version: cloudify_dsl_1_3
+
+description: >
+  Level3 AV POC - install VPC with all necessary networking resources,
+  EKS, RDS, and Zabbix on top and connect them together.
+
+imports:
+  - http://cloudify.co/spec/cloudify/6.3.0/types.yaml
+
+inputs:
+
+  aws_region:
+    type: string
+    display_label: AWS Region
+    description: The AWS region to create the VPC and resources in
+    default: us-west-1
+    constraints:
+      - valid_values:
+          - us-east-1
+          - us-east-2
+          - us-west-1
+          - us-west-2
+          - eu-central-1
+          - eu-west-1
+          - eu-west-2
+          - eu-south-1
+          - eu-west-3
+          - eu-north-1
+          - af-south-1
+          - ap-east-1
+          - ap-south-1
+          - ap-northeast-3
+          - ap-northeast-2
+          - ap-southeast-1
+          - ap-southeast-2
+          - ap-northeast-1
+          - ca-central-1
+          - cn-north-1
+          - cn-northwest-1
+          - me-south-1
+          - sa-east-1
+
+  primary_availability_zone:
+    type: string
+    display_label: Primary availability zone
+    description: The primary availability zone to deploy primary public and private subnets in
+    default: { concat: [ { get_input: aws_region }, 'a' ] }
+
+  secondary_availability_zone:
+    type: string
+    display_label: Secondary availability zone
+    description: The secondary availability zone to deploy secondary public and private subnets in
+    default: { concat: [ { get_input: aws_region }, 'c' ] }
+
+  vpc_cidr:
+    type: string
+    display_label: VPC CIDR
+    description: The CIDR network for the VPC
+    default: "10.0.0.0/16"
+
+  primary_public_subnet_cidr:
+    type: string
+    display_label: Primary public subnet CIDR
+    description: The CIDR network for the primary public subnet
+    default: "10.0.1.0/24"
+
+  secondary_public_subnet_cidr:
+    type: string
+    display_label: Secondary public subnet CIDR
+    description: The CIDR network for the secondary public subnet
+    default: "10.0.2.0/24"
+
+  primary_private_subnet_cidr:
+    type: string
+    display_label: Primary private subnet CIDR
+    description: The CIDR network for the primary private subnet
+    default: "10.0.11.0/24"
+
+  secondary_private_subnet_cidr:
+    type: string
+    display_label: Secondary private subnet CIDR
+    description: The CIDR network for the secondary private subnet
+    default: "10.0.12.0/24"
+
+  customer_name:
+    type: string
+    display_label: Customer Name
+    description: The name of the customer. Used to tag resources in AWS.
+    default: Acme
+
+  eks_cluster_name:
+    type: string
+    display_label: EKS Cluster Name
+    description: The name of EKS cluster to be created
+    default: { concat: [ { get_input: customer_name }, "-cluster"] }
+
+  eks_nodegroup_name:
+    type: string
+    display_label: EKS NodeGroup Name
+    description: The name of EKS NodeGroup to be created
+    default: { concat: [ { get_input: customer_name }, "-ng"] }
+
+  kubernetes_version:
+    type: string
+    display_label: Kubernetes Version
+    description: The version of Kubernetes used for EKS cluster
+    default: '1.21'
+
+  service_account_name:
+    type: string
+    display_label: EKS Service Account Name
+    description: The name of EKS Cluster Service Account to be created
+    default: { string_lower: { concat: [ { get_input: customer_name }, "-sa"] } }
+
+  service_account_namespace:
+    type: string
+    display_label: EKS Service Account Namespace
+    description: The name of EKS Cluster Service Account namespace
+    default: default
+
+  rds_name:
+    type: string
+    display_label: RDS Instance Name
+    description: >
+      The name of RDS instance to be created.
+      Identifiers must begin with a letter; must contain only ASCII
+      letters, digits, and hyphens; and must not end with a hyphen or
+      contain two consecutive hyphens.
+    default: { concat: [ { get_input: customer_name }, "Rds"] }
+
+  vpc_subnet_1_cidr:
+    type: string
+    display_label: Subnet 1 CIDR
+    description: CIDR of Subnet 1
+    default: "10.0.3.0/24"
+
+  vpc_subnet_2_cidr:
+    type: string
+    display_label: Subnet 2 CIDR
+    description: CIDR of Subnet 2
+    default: "10.0.4.0/24"
+
+  rds_storage:
+    type: string
+    display_label: RDS Storage
+    description: The storage of RDS instance in GiB
+    default: 20
+
+  rds_master_username:
+    type: string
+    display_label: RDS Master Username
+    description: Master User name of RDS instance database
+    default: root
+
+  rds_master_user_password:
+    type: string
+    display_label: RDS Master User Password
+    description: Master User password of RDS instance database
+    default: $tR0ng-p4s$w0rD
+
+  zabbix_namespace:
+    type: string
+    display_label: Zabbix Namespace
+    default: monitoring
+    description: The namespace to install Zabbix into
+
+
+node_templates:
+
+# AWS VPC deployment
+  vpc:
+    type: cloudify.nodes.ServiceComponent
+    properties:
+      resource_config:
+        blueprint:
+          external_resource: false
+          id: vpc
+          blueprint_archive: https://github.com/Cloudify-PS/level3av-poc/archive/refs/heads/main.zip
+          main_file_name: vpc/blueprint.yaml
+        deployment:
+          id: vpc
+          auto_inc_suffix: false
+          inputs:
+            aws_region: { get_input: aws_region }
+            primary_availability_zone: { get_input: primary_availability_zone }
+            secondary_availability_zone: { get_input: secondary_availability_zone }
+            vpc_cidr: { get_input: vpc_cidr }
+            primary_public_subnet_cidr: { get_input: primary_public_subnet_cidr }
+            secondary_public_subnet_cidr: { get_input: secondary_public_subnet_cidr }
+            primary_private_subnet_cidr: { get_input: primary_private_subnet_cidr }
+            secondary_private_subnet_cidr: { get_input: secondary_private_subnet_cidr }
+            customer_name: { get_input: customer_name }
+
+# AWS EKS deployment
+  eks:
+    type: cloudify.nodes.ServiceComponent
+    properties:
+      resource_config:
+        blueprint:
+          external_resource: false
+          id: eks
+          blueprint_archive: https://github.com/Cloudify-PS/level3av-poc/archive/refs/heads/main.zip
+          main_file_name: eks/blueprint.yaml
+        deployment:
+          id: eks
+          auto_inc_suffix: false
+          inputs:
+            customer_name: { get_input: customer_name }
+            aws_region: { get_input: aws_region }
+            eks_cluster_name: { get_input: eks_cluster_name }
+            eks_nodegroup_name: { get_input: eks_nodegroup_name }
+            kubernetes_version: { get_input: kubernetes_version }
+            service_account_name: { get_input: service_account_name }
+            service_account_namespace: { get_input: service_account_namespace }
+            private_subnet_01_id: { get_capability: [{ get_attribute: [vpc, deployment, id] }, primary_private_subnet_id] }
+            private_subnet_02_id: { get_capability: [{ get_attribute: [vpc, deployment, id] }, secondary_private_subnet_id] }
+            public_subnet_01_id: { get_capability: [{ get_attribute: [vpc, deployment, id] }, primary_public_subnet_id] }
+            public_subnet_02_id: { get_capability: [{ get_attribute: [vpc, deployment, id] }, secondary_public_subnet_id] }
+            security_group_id: { get_capability: [{ get_attribute: [vpc, deployment, id] }, gateway_management_security_group_id] }
+    relationships:
+      - type: cloudify.relationships.depends_on
+        target: vpc
+
+# AWS RDS deployment
+  rds:
+    type: cloudify.nodes.ServiceComponent
+    properties:
+      resource_config:
+        blueprint:
+          external_resource: false
+          id: rds
+          blueprint_archive: https://github.com/Cloudify-PS/level3av-poc/archive/refs/heads/main.zip
+          main_file_name: rds/blueprint.yaml
+        deployment:
+          id: rds
+          auto_inc_suffix: false
+          inputs:
+            customer_name: { get_input: customer_name }
+            aws_region: { get_input: aws_region }
+            rds_name: { get_input: rds_name }
+            vpc_id: { get_capability: [{ get_attribute: [vpc, deployment, id] }, vpc_id] }
+            vpc_subnet_1_cidr: { get_input: vpc_subnet_1_cidr }
+            vpc_subnet_1_az: { get_input: primary_availability_zone }
+            vpc_subnet_2_cidr: { get_input: vpc_subnet_2_cidr }
+            vpc_subnet_2_az: { get_input: secondary_availability_zone }
+            rds_availability_zone: { get_input: primary_availability_zone }
+            rds_storage: { get_input: rds_storage }
+            rds_master_username: { get_input: rds_master_username }
+            rds_master_user_password: { get_input: rds_master_user_password }
+    relationships:
+      - type: cloudify.relationships.depends_on
+        target: vpc
+
+# Zabbix deployment
+  zabbix:
+    type: cloudify.nodes.ServiceComponent
+    properties:
+      resource_config:
+        blueprint:
+          external_resource: false
+          id: zabbix
+          blueprint_archive: https://github.com/Cloudify-PS/level3av-poc/archive/refs/heads/main.zip
+          main_file_name: zabbix-helm/blueprint.yaml
+        deployment:
+          id: zabbix
+          auto_inc_suffix: false
+          inputs:
+            namespace: { get_input: zabbix_namespace }
+            # TODO: to be verified
+            database_endpoint:
+              concat:
+              - { get_capability: [{ get_attribute: [rds, deployment, id] }, endpoint_address] }
+              - ":"
+              - { get_capability: [{ get_attribute: [rds, deployment, id] }, endpoint_port] }
+            kubernetes_endpoint: { get_capability: [{ get_attribute: [eks, deployment, id] }, endpoint] }
+            # TODO: to be verified
+            kubernetes_token: { get_capability: [{ get_attribute: [eks, deployment, id] }, connection_details, file_content, users, 0, user, token] }
+            # TODO: to be verified
+            kubernetes_ca_secret: { get_capability: [{ get_attribute: [eks, deployment, id] }, connection_details, file_content, clusters, 0, cluster, certificate-authority-data] }
+    relationships:
+      - type: cloudify.relationships.depends_on
+        target: eks
+      - type: cloudify.relationships.depends_on
+        target: rds
+
+outputs:
+  rds_endpoint:
+    description: RDS endpoint address
+    value:
+      concat:
+       - { get_capability: [{ get_attribute: [rds, deployment, id] }, endpoint_address] }
+       - ":"
+       - { get_capability: [{ get_attribute: [rds, deployment, id] }, endpoint_port] }
+
+  eks_endpoint:
+    description: EKS endpoint address
+    value: { get_capability: [{ get_attribute: [eks, deployment, id] }, endpoint] }
+
+  # zabbix_endpoint:
+  #   description: The HTTP endpoint for accessing the Zabbix web interface
+  #   value: ?
