@@ -176,7 +176,7 @@ node_templates:
           external_resource: false
           id: vpc
           blueprint_archive: https://github.com/Cloudify-PS/level3av-poc/archive/refs/heads/main.zip
-          main_file_name: vpc/blueprint.yaml
+          main_file_name: vpc.yaml
         deployment:
           id: vpc
           auto_inc_suffix: false
@@ -200,7 +200,7 @@ node_templates:
           external_resource: false
           id: eks
           blueprint_archive: https://github.com/Cloudify-PS/level3av-poc/archive/refs/heads/main.zip
-          main_file_name: eks/blueprint.yaml
+          main_file_name: eks.yaml
         deployment:
           id: eks
           auto_inc_suffix: false
@@ -230,7 +230,7 @@ node_templates:
           external_resource: false
           id: rds
           blueprint_archive: https://github.com/Cloudify-PS/level3av-poc/archive/refs/heads/main.zip
-          main_file_name: rds/blueprint.yaml
+          main_file_name: rds.yaml
         deployment:
           id: rds
           auto_inc_suffix: false
@@ -260,7 +260,7 @@ node_templates:
           external_resource: false
           id: zabbix
           blueprint_archive: https://github.com/Cloudify-PS/level3av-poc/archive/refs/heads/main.zip
-          main_file_name: zabbix-helm/blueprint.yaml
+          main_file_name: zabbix.yaml
         deployment:
           id: zabbix
           auto_inc_suffix: false

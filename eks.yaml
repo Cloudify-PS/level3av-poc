@@ -345,8 +345,6 @@ node_templates:
     interfaces:
       cloudify.interfaces.lifecycle:
         start:
-          # For standalone deployment use the currently commented-out line
-          # implementation: scripts/store_authentication_data.py
           implementation: eks/scripts/store_authentication_data.py
           executor: central_deployment_agent
           inputs:
