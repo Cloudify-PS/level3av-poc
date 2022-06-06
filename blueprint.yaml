@@ -266,17 +266,10 @@ node_templates:
           auto_inc_suffix: false
           inputs:
             namespace: { get_input: zabbix_namespace }
-            # TODO: to be verified
-            database_endpoint:
-              concat:
-              - { get_capability: [{ get_attribute: [rds, deployment, id] }, endpoint_address] }
-              - ":"
-              - { get_capability: [{ get_attribute: [rds, deployment, id] }, endpoint_port] }
+            database_endpoint: { get_capability: [{ get_attribute: [rds, deployment, id] }, endpoint_address] }
             kubernetes_endpoint: { get_capability: [{ get_attribute: [eks, deployment, id] }, endpoint] }
-            # TODO: to be verified
-            kubernetes_token: { get_capability: [{ get_attribute: [eks, deployment, id] }, connection_details, file_content, users, 0, user, token] }
-            # TODO: to be verified
-            kubernetes_ca_secret: { get_capability: [{ get_attribute: [eks, deployment, id] }, connection_details, file_content, clusters, 0, cluster, certificate-authority-data] }
+            kubernetes_token: { get_capability: [{ get_attribute: [eks, deployment, id] }, token] }
+            kubernetes_ca_secret: { get_capability: [{ get_attribute: [eks, deployment, id] }, ca_certificate] }
     relationships:
       - type: cloudify.relationships.depends_on
         target: eks
@@ -296,6 +289,6 @@ outputs:
     description: EKS endpoint address
     value: { get_capability: [{ get_attribute: [eks, deployment, id] }, endpoint] }
 
-  # zabbix_endpoint:
-  #   description: The HTTP endpoint for accessing the Zabbix web interface
-  #   value: ?
+  zabbix_endpoint:
+    description: The HTTP endpoint for accessing the Zabbix web interface
+    value: { get_capability: [{ get_attribute: [zabbix, deployment, id] }, zabbix_endpoint] }

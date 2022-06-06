@@ -350,6 +350,9 @@ node_templates:
           inputs:
             token: { get_attribute: [ service_account_token, kubernetes, data, token ] }
             ca: { get_attribute: [ eks_cluster, kubeconf, clusters, 0, cluster, certificate-authority-data ] }
+    relationships:
+      - type: cloudify.relationships.depends_on
+        target: service_account_token
 
 
 capabilities:

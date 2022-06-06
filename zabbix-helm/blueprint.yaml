@@ -62,7 +62,7 @@ node_templates:
           api_options:
             host: { get_input: kubernetes_endpoint }
             api_key: { get_input: kubernetes_token }
-            ssl_ca_cert: { get_secret: { get_input: kubernetes_ca_secret } }
+            ssl_ca_cert: { get_input: kubernetes_ca_secret }
       resource_config:
         name: zabbix
         chart: celtic/zabbix
@@ -96,7 +96,7 @@ node_templates:
           api_options:
             host: { get_input: kubernetes_endpoint }
             api_key: { get_input: kubernetes_token }
-            ssl_ca_cert: { get_secret: { get_input: kubernetes_ca_secret } }
+            ssl_ca_cert: { get_input: kubernetes_ca_secret }
       use_external_resource: true
       definition:
         apiVersion: v1
