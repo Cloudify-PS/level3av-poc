@@ -273,10 +273,98 @@ node_templates:
       - type: cloudify.relationships.aws.eks.connected_to_eks_cluster
         target: eks_cluster
 
+  cluster_role_binding:
+    type: cloudify.kubernetes.resources.RoleBinding
+    properties:
+      client_config:
+        configuration: *kubernetes_master_configuration
+      definition:
+        apiVersion: rbac.authorization.k8s.io/v1
+        kind: ClusterRoleBinding
+        metadata:
+          name: { get_input: service_account_name }
+          namespace: { get_input: service_account_namespace }
+        roleRef:
+          apiGroup: rbac.authorization.k8s.io
+          kind: ClusterRole
+          name: cluster-admin
+        subjects:
+          - kind: ServiceAccount
+            name: { get_input: service_account_name }
+            namespace: { get_input: service_account_namespace }
+      options:
+        namespace: { get_input: service_account_namespace }
+    relationships:
+      - type: cloudify.relationships.depends_on
+        target: kubernetes_master
+      - type: cloudify.relationships.depends_on
+        target: service_account
+      - type: cloudify.relationships.aws.eks.connected_to_eks_cluster
+        target: eks_cluster
+
+  service_account_token:
+    type: cloudify.kubernetes.resources.CustomBlueprintDefinedResource
+    properties:
+      client_config:
+        configuration: *kubernetes_master_configuration
+      use_external_resource: true
+      definition:
+        apiVersion: v1
+        kind: Secret
+        metadata:
+          name: { get_attribute: [ service_account, kubernetes, secrets, 0, name ] }
+      api_mapping:
+        create:
+          api: CoreV1Api
+          method: create_namespaced_secret
+          payload: V1Secret
+        read:
+          api: CoreV1Api
+          method: read_namespaced_secret
+        update:
+          api: CoreV1Api
+          method: replace_namespaced_secret
+          payload: V1Secret
+        delete:
+          api: CoreV1Api
+          method: delete_namespaced_secret
+          payload: V1DeleteOptions
+    relationships:
+      - type: cloudify.relationships.depends_on
+        target: kubernetes_master
+      - type: cloudify.relationships.depends_on
+        target: service_account
+      - type: cloudify.relationships.aws.eks.connected_to_eks_cluster
+        target: eks_cluster
+    interfaces:
+      cloudify.interfaces.lifecycle:
+        delete: {}
+
+  decoded_authentication_data:
+    type: cloudify.nodes.Root
+    interfaces:
+      cloudify.interfaces.lifecycle:
+        start:
+          implementation: scripts/store_authentication_data.py
+          executor: central_deployment_agent
+          inputs:
+            token: { get_attribute: [ service_account_token, kubernetes, data, token ] }
+            ca: { get_attribute: [ eks_cluster, kubeconf, clusters, 0, cluster, certificate-authority-data ] }
+    relationships:
+      - type: cloudify.relationships.depends_on
+        target: service_account_token
+
+
 capabilities:
 
   endpoint:
-    value: { get_attribute: [eks_cluster, kubeconf, clusters, 0, cluster, server ] }
+    value: { get_attribute: [ eks_cluster, kubeconf, clusters, 0, cluster, server ] }
+
+  token:
+    value: { get_attribute: [ decoded_authentication_data, sa_token_decoded ] }
+
+  ca_certificate:
+    value: { get_attribute: [ decoded_authentication_data, ca_certificate_decoded ] }
 
   connection_details:
     value: *kubernetes_master_configuration
