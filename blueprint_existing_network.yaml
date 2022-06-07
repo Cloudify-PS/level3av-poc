@@ -1,8 +1,8 @@
 tosca_definitions_version: cloudify_dsl_1_3
 
 description: >
-  Level3 AV POC - install VPC with all necessary networking resources,
-  EKS, RDS, and Zabbix on top and connect them together.
+  Level3 AV POC - install EKS, RDS, and Zabbix on top and connect them
+  together. Use an existing VPC and other relevant network resources.
 
 imports:
   - http://cloudify.co/spec/cloudify/6.3.0/types.yaml
@@ -52,35 +52,35 @@ inputs:
     description: The secondary availability zone to deploy secondary public and private subnets in
     default: { concat: [ { get_input: aws_region }, 'c' ] }
 
-  vpc_cidr:
+  vpc_id:
     type: string
-    display_label: VPC CIDR
-    description: The CIDR network for the VPC
-    default: "10.0.0.0/16"
+    display_label: VPC ID ARN
+    description: The ARN of the VPC which the resources will be deployed to
 
-  primary_public_subnet_cidr:
+  primary_private_subnet_id:
     type: string
-    display_label: Primary public subnet CIDR
-    description: The CIDR network for the primary public subnet
-    default: "10.0.1.0/24"
+    display_label: Primary Private Subnet ID
+    description: The ID of primary private subnet of VPC
 
-  secondary_public_subnet_cidr:
+  secondary_private_subnet_id:
     type: string
-    display_label: Secondary public subnet CIDR
-    description: The CIDR network for the secondary public subnet
-    default: "10.0.2.0/24"
+    display_label: Secondary Private Subnet ID
+    description: The ID of secondary private subnet of VPC
 
-  primary_private_subnet_cidr:
+  primary_public_subnet_id:
     type: string
-    display_label: Primary private subnet CIDR
-    description: The CIDR network for the primary private subnet
-    default: "10.0.11.0/24"
+    display_label: Primary Public Subnet ID
+    description: The ID of primary public subnet of VPC
 
-  secondary_private_subnet_cidr:
+  secondary_public_subnet_id:
     type: string
-    display_label: Secondary private subnet CIDR
-    description: The CIDR network for the secondary private subnet
-    default: "10.0.12.0/24"
+    display_label: Secondary Public Subnet ID
+    description: The ID of secondary public subnet of VPC
+
+  gateway_management_security_group_id:
+    type: string
+    display_label: Gateway Management Security Group ID
+    description: The ID of a Gateway Management Security Group
 
   customer_name:
     type: string
@@ -167,30 +167,6 @@ inputs:
 
 node_templates:
 
-# AWS VPC deployment
-  vpc:
-    type: cloudify.nodes.ServiceComponent
-    properties:
-      resource_config:
-        blueprint:
-          external_resource: false
-          id: vpc
-          blueprint_archive: https://github.com/Cloudify-PS/level3av-poc/archive/refs/heads/main.zip
-          main_file_name: vpc.yaml
-        deployment:
-          id: vpc
-          auto_inc_suffix: false
-          inputs:
-            aws_region: { get_input: aws_region }
-            primary_availability_zone: { get_input: primary_availability_zone }
-            secondary_availability_zone: { get_input: secondary_availability_zone }
-            vpc_cidr: { get_input: vpc_cidr }
-            primary_public_subnet_cidr: { get_input: primary_public_subnet_cidr }
-            secondary_public_subnet_cidr: { get_input: secondary_public_subnet_cidr }
-            primary_private_subnet_cidr: { get_input: primary_private_subnet_cidr }
-            secondary_private_subnet_cidr: { get_input: secondary_private_subnet_cidr }
-            customer_name: { get_input: customer_name }
-
 # AWS EKS deployment
   eks:
     type: cloudify.nodes.ServiceComponent
@@ -212,14 +188,11 @@ node_templates:
             kubernetes_version: { get_input: kubernetes_version }
             service_account_name: { get_input: service_account_name }
             service_account_namespace: { get_input: service_account_namespace }
-            private_subnet_01_id: { get_capability: [{ get_attribute: [vpc, deployment, id] }, primary_private_subnet_id] }
-            private_subnet_02_id: { get_capability: [{ get_attribute: [vpc, deployment, id] }, secondary_private_subnet_id] }
-            public_subnet_01_id: { get_capability: [{ get_attribute: [vpc, deployment, id] }, primary_public_subnet_id] }
-            public_subnet_02_id: { get_capability: [{ get_attribute: [vpc, deployment, id] }, secondary_public_subnet_id] }
-            security_group_id: { get_capability: [{ get_attribute: [vpc, deployment, id] }, gateway_management_security_group_id] }
-    relationships:
-      - type: cloudify.relationships.depends_on
-        target: vpc
+            private_subnet_01_id: { get_input: primary_private_subnet_id }
+            private_subnet_02_id: { get_input: secondary_private_subnet_id }
+            public_subnet_01_id: { get_input: primary_public_subnet_id }
+            public_subnet_02_id: { get_input: secondary_public_subnet_id }
+            security_group_id: { get_input: gateway_management_security_group_id }
 
 # AWS RDS deployment
   rds:
@@ -238,7 +211,7 @@ node_templates:
             customer_name: { get_input: customer_name }
             aws_region: { get_input: aws_region }
             rds_name: { get_input: rds_name }
-            vpc_id: { get_capability: [{ get_attribute: [vpc, deployment, id] }, vpc_id] }
+            vpc_id: { get_input: vpc_id }
             vpc_subnet_1_cidr: { get_input: vpc_subnet_1_cidr }
             vpc_subnet_1_az: { get_input: primary_availability_zone }
             vpc_subnet_2_cidr: { get_input: vpc_subnet_2_cidr }
@@ -247,9 +220,6 @@ node_templates:
             rds_storage: { get_input: rds_storage }
             rds_master_username: { get_input: rds_master_username }
             rds_master_user_password: { get_input: rds_master_user_password }
-    relationships:
-      - type: cloudify.relationships.depends_on
-        target: vpc
 
 # Zabbix deployment
   zabbix:

@@ -11,7 +11,8 @@ To create the infrastructure:
 - make sure you have all the necessary secrets created and set up:
     - aws_access_key_id
     - aws_secret_access_key
-- upload the [blueprint](blueprint.yaml) to your Cloudify Manager, most preferably using the URL: https://github.com/Cloudify-PS/level3av-poc/archive/refs/heads/main.zip
+- upload the [blueprint](blueprint.yaml) to your Cloudify Manager, most preferably using the URL: https://github.com/Cloudify-PS/level3av-poc/archive/refs/heads/main.zip  
+  (for the existing VPC and network option, choose [blueprint_existing_network.yaml](blueprint_existing_network.yaml))
 - create and install a deployment providing your desired configuration in inputs
 
 The main deployment exposes the following outputs:
