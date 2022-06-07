@@ -49,6 +49,12 @@ inputs:
     description: The secondary availability zone to deploy secondary public and private subnets in
     default: { concat: [ { get_input: aws_region }, 'c' ] }
 
+  vpc_id:
+    type: string
+    display_label: VPC ARN
+    description: The ARN of an existing VPC
+    default: "Not relevant"
+
   vpc_cidr:
     type: string
     display_label: VPC CIDR

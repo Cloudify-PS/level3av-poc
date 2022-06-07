@@ -1,6 +1,6 @@
 # level3av-poc
 
-A deployment of Zabbix monitoring instance ([blueprint](zabbix.yaml), [ReadMe](zabbix-helm/README.md)) on top of EKS cluster ([blueprint](eks.yaml), [ReadMe](eks/README.md)) and RDS database ([blueprint](rds.yaml), [ReadMe](rds/README.md)) with all necessary networking resources ([blueprint](vpc.yaml), [ReadMe](vpc/README.md)).  
+A deployment of Zabbix monitoring instance ([blueprint](zabbix.yaml), [ReadMe](zabbix-helm/README.md)) on top of EKS cluster ([blueprint](eks.yaml), [ReadMe](eks/README.md)) and RDS database ([blueprint](rds.yaml), [ReadMe](rds/README.md)) with all necessary networking resources ([existing_vpc](existing_vpc.yaml), [new_vpc](new_vpc.yaml), [ReadMe](vpc/README.md)).  
 
 To create the infrastructure:
 - make sure you have the following [plugins](https://cloudify.co/plugins/) installed on your Cloudify Manager instance:
