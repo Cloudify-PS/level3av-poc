@@ -5,3 +5,15 @@ zabbixserver:
       value: "fqdn"
     - name: "ZBX_AUTOHANODENAME"
       value: "fqdn"
+
+db_access:
+  secret_name: false
+  DB_SERVER_PORT: "5432"
+  POSTGRES_DB: "zabbix"
+
+postgresql:
+  enabled: false
+
+zabbixweb:
+  service:
+    type: LoadBalancer

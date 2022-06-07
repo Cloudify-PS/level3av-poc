@@ -21,6 +21,18 @@ inputs:
     default: zabbix-postgresql
     description: Database endpoint to connect Zabbix to
 
+  database_username:
+    type: string
+    display_label: Database username
+    default: root
+    description: Username to connect with Postgres database
+
+  database_password:
+    type: string
+    display_label: Database password
+    default: $tR0ng-p4s$w0rD
+    description: Password to connect with Postgres database
+
   kubernetes_endpoint:
     type: string
     display_label: Kubernetes API Endpoint
@@ -68,8 +80,12 @@ node_templates:
         chart: celtic/zabbix
         values_file: zabbix-helm/values.yaml
         set_values:
-          - name: "zabbixserver.DB_SERVER_HOST"
+          - name: "db_access.DB_SERVER_HOST"
             value: { get_input: database_endpoint }
+          - name: "db_access.POSTGRES_USER"
+            value: { get_input: database_username }
+          - name: "db_access.POSTGRES_PASSWORD"
+            value: { get_input: database_password }
           - name: "zabbixweb.service.type"
             value: LoadBalancer
         flags:
