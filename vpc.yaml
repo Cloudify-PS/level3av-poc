@@ -107,10 +107,10 @@ node_templates:
           Value: { concat: [ { get_input: customer_name }, "-vpc"] }
     interfaces:
       cloudify.interfaces.lifecycle:
-        configure:
-          implementation: aws.cloudify_aws.ec2.resources.vpc.create
+        start:
+          implementation: aws.cloudify_aws.ec2.resources.vpc.modify_vpc_attribute
           inputs:
-            modify_vpc_attribute_args:
+            resource_config:
               EnableDnsHostnames:
                 Value: True
 
