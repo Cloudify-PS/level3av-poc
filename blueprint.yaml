@@ -247,6 +247,10 @@ node_templates:
             rds_storage: { get_input: rds_storage }
             rds_master_username: { get_input: rds_master_username }
             rds_master_user_password: { get_input: rds_master_user_password }
+            k8s_primary_public_subnet_cidr: { get_input: primary_public_subnet_cidr }
+            k8s_secondary_public_subnet_cidr: { get_input: secondary_public_subnet_cidr }
+            k8s_primary_private_subnet_cidr: { get_input: primary_private_subnet_cidr }
+            k8s_secondary_private_subnet_cidr: { get_input: secondary_private_subnet_cidr }
     relationships:
       - type: cloudify.relationships.depends_on
         target: vpc

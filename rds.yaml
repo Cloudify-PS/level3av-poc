@@ -108,6 +108,22 @@ inputs:
     description: Master User password of RDS instance database
     default: $tR0ng-p4s$w0rD
 
+  k8s_primary_public_subnet_cidr:
+    type: string
+    display_label: EKS Cluster primary public subnet CIDR
+
+  k8s_secondary_public_subnet_cidr:
+    type: string
+    display_label: EKS Cluster secondary public subnet CIDR
+
+  k8s_primary_private_subnet_cidr:
+    type: string
+    display_label: EKS Cluster primary private subnet CIDR
+
+  k8s_secondary_private_subnet_cidr:
+    type: string
+    display_label: EKS Cluster secondary private subnet CIDR
+
 dsl_definitions:
   client_config: &client_config
     aws_access_key_id: { get_secret: aws_access_key_id }
@@ -211,6 +227,11 @@ node_templates:
         kwargs:
           IpPermissions:
             - IpProtocol: tcp
+              FromPort: 22
+              ToPort: 22
+              IpRanges:
+                - CidrIp: { get_attribute: [rds_vpc, expected_configuration, CidrBlock] }
+            - IpProtocol: tcp
               FromPort: 80
               ToPort: 80
               IpRanges:
@@ -221,10 +242,25 @@ node_templates:
               IpRanges:
                 - CidrIp: { get_attribute: [rds_vpc, expected_configuration, CidrBlock] }
             - IpProtocol: tcp
-              FromPort: 22
-              ToPort: 22
+              FromPort: 5432
+              ToPort: 5432
               IpRanges:
-                - CidrIp: { get_attribute: [rds_vpc, expected_configuration, CidrBlock] }
+                - CidrIp: { get_input: k8s_primary_public_subnet_cidr }
+            - IpProtocol: tcp
+              FromPort: 5432
+              ToPort: 5432
+              IpRanges:
+                - CidrIp: { get_input: k8s_secondary_public_subnet_cidr }
+            - IpProtocol: tcp
+              FromPort: 5432
+              ToPort: 5432
+              IpRanges:
+                - CidrIp: { get_input: k8s_primary_private_subnet_cidr }
+            - IpProtocol: tcp
+              FromPort: 5432
+              ToPort: 5432
+              IpRanges:
+                - CidrIp: { get_input: k8s_secondary_private_subnet_cidr }
             - IpProtocol: icmp
               FromPort: -1
               ToPort: -1
@@ -244,10 +280,11 @@ node_templates:
         create:
           inputs:
             resource_config:
-              DBName: { get_input: rds_name }
-              DBInstanceClass: db.t2.small
-              Engine: mysql
-              EngineVersion: 8.0.26
+              DBName: zabbix
+              DBInstanceClass: db.t3.small
+              Engine: postgres
+              EngineVersion: "14.1"
+              Port: 5432
               AvailabilityZone: { get_input: rds_availability_zone }
               StorageType: gp2
               AllocatedStorage: { get_input: rds_storage }
@@ -259,6 +296,7 @@ node_templates:
       target: rds_subnet_group
     - type: cloudify.relationships.aws.rds.instance.connected_to
       target: rds_security_group
+
 
 capabilities:
 
