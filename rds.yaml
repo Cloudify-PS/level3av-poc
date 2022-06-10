@@ -291,6 +291,8 @@ node_templates:
               MasterUsername: { get_input: rds_master_username }
               MasterUserPassword: { get_input: rds_master_user_password }
               DBSubnetGroupName: { get_attribute: [rds_subnet_group, resource_config, DBSubnetGroupName] }
+              DBSecurityGroups:
+                - { get_attribute: [rds_security_group, aws_resource_id] }
     relationships:
     - type: cloudify.relationships.depends_on
       target: rds_subnet_group
