@@ -156,7 +156,7 @@ inputs:
     type: string
     display_label: RDS Master User Password
     description: Master User password of RDS instance database
-    default: $tR0ng-p4s$w0rD
+    default: StR0nGp4sSw0rD
 
   zabbix_namespace:
     type: string

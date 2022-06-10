@@ -30,7 +30,7 @@ inputs:
   database_password:
     type: string
     display_label: Database password
-    default: $tR0ng-p4s$w0rD
+    default: StR0nGp4sSw0rD
     description: Password to connect with Postgres database
 
   kubernetes_endpoint:
@@ -61,7 +61,8 @@ node_templates:
     properties:
       resource_config:
         name: celtic
-        repo_url: https://cetic.github.io/helm-charts
+        # repo_url: https://cetic.github.io/helm-charts
+        repo_url: https://cfy-anthony.s3.amazonaws.com/charts/
     relationships:
       - target: helm_install
         type: cloudify.helm.relationships.run_on_host

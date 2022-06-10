@@ -106,7 +106,7 @@ inputs:
     type: string
     display_label: RDS Master User Password
     description: Master User password of RDS instance database
-    default: $tR0ng-p4s$w0rD
+    default: StR0nGp4sSw0rD
 
   k8s_primary_public_subnet_cidr:
     type: string
@@ -291,7 +291,7 @@ node_templates:
               MasterUsername: { get_input: rds_master_username }
               MasterUserPassword: { get_input: rds_master_user_password }
               DBSubnetGroupName: { get_attribute: [rds_subnet_group, resource_config, DBSubnetGroupName] }
-              DBSecurityGroups:
+              VpcSecurityGroupIds:
                 - { get_attribute: [rds_security_group, aws_resource_id] }
     relationships:
     - type: cloudify.relationships.depends_on
