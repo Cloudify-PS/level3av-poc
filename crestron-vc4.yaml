@@ -6,6 +6,7 @@ imports:
   - https://cloudify.co/spec/cloudify/6.3.0/types.yaml
   - plugin:cloudify-aws-plugin
   - plugin:cloudify-utilities-plugin
+  - plugin:cloudify-ansible-plugin
 
 inputs:
 
@@ -45,6 +46,18 @@ inputs:
     display_label: Customer Name
     description: The name of the customer. Used to tag resources in AWS.
     default: Acme
+
+  vpc_id:
+    type: string
+    display_label: VPC ID
+    description: Resource ID of VPC to be used
+
+  ssh_ips:
+    type: list
+    display_label: SSH IPs
+    description: List of allowed IPs for SSH
+    default:
+      - CidrIp: { concat: [ { get_secret: cloudify_manager_ip }, "/32" ] }
 
   instance_type:
     type: string
@@ -112,6 +125,12 @@ node_templates:
         openssh_format: true
       use_secret_store: true
       use_secrets_if_exist: true
+    interfaces:
+        cloudify.interfaces.lifecycle:
+          create:
+            implementation: keys.cloudify_ssh_key.operations.create
+            inputs:
+              store_private_key_material: true
 
   ec2_keypair:
     type: cloudify.nodes.aws.ec2.Keypair
@@ -124,6 +143,61 @@ node_templates:
       - type: cloudify.relationships.depends_on
         target: ssh_key
 
+  vc4_security_group:
+    type: cloudify.nodes.aws.ec2.SecurityGroup
+    properties:
+      client_config: *client_config
+      resource_config:
+        GroupName: { concat: [ { get_input: customer_name }, "-vc4-server"] }
+        Description: VC4 Server security group
+        VpcId: { get_input: vpc_id }
+      Tags:
+        - Key: Name
+          Value: { concat: [ { get_input: customer_name }, "-vc4-server"] }
+
+  vc4_ingress_rules:
+    type: cloudify.nodes.aws.ec2.SecurityGroupRuleIngress
+    properties:
+      client_config: *client_config
+      resource_config:
+        kwargs:
+          IpPermissions:
+            - IpProtocol: tcp
+              FromPort: 22
+              ToPort: 22
+              IpRanges: { get_input: ssh_ips }
+    relationships:
+      - type: cloudify.relationships.contained_in
+        target: vc4_security_group
+
+  vc4_nic:
+    type: cloudify.nodes.aws.ec2.Interface
+    properties:
+      client_config: *client_config
+      resource_config:
+        kwargs:
+          Description: { concat: [ { get_input: customer_name }, "-vc4-nic"] }
+          SubnetId: { get_input: subnet_id }
+          Groups:
+            - { get_attribute: [ vc4_security_group, aws_resource_id ] }
+    relationships:
+      - type: cloudify.relationships.depends_on
+        target: vc4_security_group
+
+  vc4_eip:
+    type: cloudify.nodes.aws.ec2.ElasticIP
+    properties:
+      client_config: *client_config
+      resource_config:
+        kwargs:
+          Domain: 'vpc'
+      Tags:
+        - Key: Name
+          Value: { concat: [ { get_input: customer_name }, "-vc4-eip"] }
+    relationships:
+      - type: cloudify.relationships.depends_on
+        target: vc4_nic
+
   vc4_server:
     type: cloudify.nodes.aws.ec2.Instances
     properties:
@@ -131,6 +205,7 @@ node_templates:
       agent_config:
         install_method: init_script
         user: ec2-user
+        key: { get_attribute: [ ssh_key, private_key_export ] }
         network: external
         extra:
           distro: centos
@@ -139,7 +214,6 @@ node_templates:
         InstanceType: { get_input: instance_type }
         ImageId: { get_input: ami_id }
         kwargs:
-          SubnetId: { get_input: subnet_id }
           KeyName: { concat: [ { get_input: customer_name }, "-vc4-key" ] }
       use_public_ip: true
       Tags:
@@ -148,8 +222,28 @@ node_templates:
     relationships:
       - type: cloudify.relationships.depends_on
         target: ec2_keypair
+      - type: cloudify.relationships.depends_on
+        target: vc4_eip
+      - type: cloudify.relationships.depends_on
+        target: vc4_nic
+  
+  vc4_application:
+    type: cloudify.nodes.Root
+    interfaces:
+      cloudify.interfaces.lifecycle:
+        start:
+          implementation: ansible.cloudify_ansible.tasks.run
+          inputs:
+            site_yaml_path: crestron-vc4/playbooks/install-vc4.yaml
+            sources: { get_attribute: [ SELF, sources ] }
+    relationships:
+      - type: cloudify.ansible.relationships.connected_to_host
+        target: vc4_server
 
 capabilities:
 
   ami_id:
     value: { get_input: ami_id }
+
+  server_ip:
+    value: { get_attribute: [ vc4_server, public_ip_address ] }
