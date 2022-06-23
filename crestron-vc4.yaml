@@ -69,39 +69,43 @@ inputs:
         - t3.micro
         - t3.small
         - t3.medium
-        - t3.large  
+        - t3.large
 
   image_id:
     type: dict
-    description: Map between region and AMI. Used to select the correct AMI based on the selected region.
+    description: >
+      Map between region and AMI. Used to select the correct AMI based on
+      the selected region.
     default:
-      us-east-1: ami-00cf249161bc21a71
-      us-east-2: ami-0c1fbef3b864e6e95
-      us-west-1: ami-022c799ffdedfc05b
-      us-west-2: ami-05bb52bb5937accfe
-      eu-central-1: ami-09fb665bbc486902e
-      eu-west-1: ami-02ab0126115dd05cf
-      eu-west-2: ami-0ce15bfb496be9059
-      eu-south-1: ami-0c12cee2eac625085
-      eu-west-3: ami-0ffcfdfd70c0762ec
-      eu-north-1: ami-01d058a3ef74c3366
-      af-south-1: ami-03101d64884ff9705
-      ap-east-1: ami-0cb89776705f69b2e
-      ap-south-1: ami-03d32b33fd993411b
-      ap-northeast-3: ami-01184a80d649091d8
-      ap-northeast-2: ami-09e6b7a3b88bc9889
-      ap-southeast-1: ami-03292af505f184a36
-      ap-southeast-2: ami-04ce4552e468d870d
-      ap-northeast-1: ami-004daf3add9941dbf
-      ca-central-1: ami-03f9f1c20c7f168e3
-      me-south-1: ami-0cdf6af4fd060060f
-      sa-east-1: ami-012bb194cdf068648
+      us-east-1: ami-003d8719443bc8563
+      us-east-2: ami-0dac8ade8debb62ba
+      us-west-1: ami-02440b38a1406df17
+      us-west-2: ami-0334a3530c40996b7
+      eu-central-1: ami-0a0729878afb31258
+      eu-west-1: ami-020b40a8bc5b0f17a
+      eu-west-2: ami-0a338a615b4e4bc6e
+      # eu-south-1: region not yet activated
+      eu-west-3: ami-0fd561dcb9025ba8d
+      eu-north-1: ami-07c6f1f2138539768
+      # af-south-1: region not yet activated
+      # ap-east-1: region not yet activated
+      ap-south-1: ami-0bbc3b28478856d25
+      ap-northeast-3: ami-06542dce5738733d4
+      ap-northeast-2: ami-035656c419b0b8282
+      ap-southeast-1: ami-0e7b58f112f3eae18
+      ap-southeast-2: ami-0d6af43594155c6e2
+      ap-northeast-1: ami-0c5d53e63e1c52d11
+      ca-central-1: ami-038e7ba51f446819d
+      # me-south-1: region not yet activated
+      sa-east-1: ami-0173e73d98e0cb7ce
     hidden: true
 
   ami_id:
     type: string
     display_label: AMI ID
-    description: The AMI ID to use for the server deployment. Defaults to the AlmaLinux OS 8.6.20220513 image for the selected region.
+    description: >
+      The AMI ID to use for the server deployment. Defaults to the
+      AlmaLinux OS 8.6.20220513 image for the selected region.
     default: { get_input: [ image_id, { get_input: aws_region } ] }
 
   subnet_id:
@@ -162,9 +166,22 @@ node_templates:
       resource_config:
         kwargs:
           IpPermissions:
+            - IpProtocol: icmp
+              FromPort: -1
+              ToPort: -1
+              IpRanges:
+                - CidrIp: 0.0.0.0/0
             - IpProtocol: tcp
               FromPort: 22
               ToPort: 22
+              IpRanges: { get_input: ssh_ips }
+            - IpProtocol: tcp
+              FromPort: 5671
+              ToPort: 5671
+              IpRanges: { get_input: ssh_ips }
+            - IpProtocol: tcp
+              FromPort: 53333
+              ToPort: 53333
               IpRanges: { get_input: ssh_ips }
     relationships:
       - type: cloudify.relationships.contained_in
@@ -184,19 +201,24 @@ node_templates:
       - type: cloudify.relationships.depends_on
         target: vc4_security_group
 
-  vc4_eip:
-    type: cloudify.nodes.aws.ec2.ElasticIP
+  cloud_init:
+    type: cloudify.nodes.CloudInit.CloudConfig
     properties:
-      client_config: *client_config
       resource_config:
-        kwargs:
-          Domain: 'vpc'
-      Tags:
-        - Key: Name
-          Value: { concat: [ { get_input: customer_name }, "-vc4-eip"] }
+        ssh_deletekeys: false
+        users:
+          - name: vc4admin
+            gcos: VC-4 Admin
+            shell: /bin/bash
+            sudo: ALL=(ALL) NOPASSWD:ALL
+            ssh-authorized-keys:
+              - { get_attribute: [ssh_key, public_key_export] }
+            primary_group: admins
+            groups: users, admin, webadmins
+        final_message: "WOOOOOOOOOOOOOOOO - all done nerds!!"
     relationships:
       - type: cloudify.relationships.depends_on
-        target: vc4_nic
+        target: ssh_key
 
   vc4_server:
     type: cloudify.nodes.aws.ec2.Instances
@@ -204,7 +226,7 @@ node_templates:
       client_config: *client_config
       agent_config:
         install_method: init_script
-        user: ec2-user
+        user: vc4admin
         key: { get_attribute: [ ssh_key, private_key_export ] }
         network: external
         extra:
@@ -215,6 +237,7 @@ node_templates:
         ImageId: { get_input: ami_id }
         kwargs:
           KeyName: { concat: [ { get_input: customer_name }, "-vc4-key" ] }
+          UserData: { get_attribute: [cloud_init, cloud_config] }
       use_public_ip: true
       Tags:
         - Key: Name
@@ -223,10 +246,10 @@ node_templates:
       - type: cloudify.relationships.depends_on
         target: ec2_keypair
       - type: cloudify.relationships.depends_on
-        target: vc4_eip
-      - type: cloudify.relationships.depends_on
         target: vc4_nic
-  
+      - type: cloudify.relationships.depends_on
+        target: cloud_init
+
   vc4_application:
     type: cloudify.nodes.Root
     interfaces:
@@ -234,11 +257,12 @@ node_templates:
         start:
           implementation: ansible.cloudify_ansible.tasks.run
           inputs:
-            site_yaml_path: crestron-vc4/playbooks/install-vc4.yaml
+            site_yaml_path: crestron-vc4/vc-4-master/installvc4.yml
             sources: { get_attribute: [ SELF, sources ] }
     relationships:
       - type: cloudify.ansible.relationships.connected_to_host
         target: vc4_server
+
 
 capabilities:
 

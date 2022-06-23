@@ -1,0 +1,15 @@
+#cloud-config
+
+ssh_deletekeys: false
+
+users:
+  - name: vc4admin
+    gcos: VC-4 Admin
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    ssh_authorized_keys:
+      - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCilnM2oz5R8Gea2dVTS31H3FDTEDayqYU7OMm1lRuXPrDjeAobXVz2tYZA5/w08Mh2trv4qqNenAEGwTziYzhqh3ImjvsbosUAhHO8YWi3QHE/Q52v2anERKKtvp9Ap5WydnKvrdUsubPUnofcmya8Ay9olIlRFcrhaorsSN8TVZszPZccVlvLhUkRVjQiqKUe3sWnS+PKK55TpM/aJBPVqSzvagkJS/Q4GKEIYOGvDupcmiE/dw65Iu9TBnxwcYOwMXrC8UA0oU+nizlq+TcuKXI/Rdh9AUhP7aJOaqITLyC9Gqj7YyaIbAm8qhVuNI4QDcUOurbyejYUoVbIxfBX9hLgQ5zdaHTfI0JicuSMz1MXRi/CFlnyWlX2X1L89BFLgtmBkDJPgu6k0SeVUoi6jz0DCTbi/IrRmEBqXzSDIKB7dFi+6sieqXvUdrm+Dfu63nBBTLCmYmQ8Hzf6/j2g7tbdWGXXNcPWvuDW/Y81fSYFyNMvGV011uurk89JpTc= floucks@IT-AZ-LAP-024
+    primary_group: admins
+    groups: users, admin, webadmins
+
+final_message: WOOOOOOOOOOOOOOOO - all done nerds!!

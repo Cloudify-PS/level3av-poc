@@ -1,0 +1,92 @@
+tosca_definitions_version: cloudify_dsl_1_3
+
+description: Trustgrid deployment using Terraform
+
+imports:
+  - http://cloudify.co/spec/cloudify/6.3.0/types.yaml
+  - plugin:cloudify-terraform-plugin
+
+inputs:
+
+  deployment_version:
+    type: string
+    display_label: Deployment version
+    default: trustgrid-dev
+    description: |
+      The version of Trustgrid deployment. Accepted values are:
+      trustgrid-dev, 
+      trustgrid-prod.
+    constraints:
+      - valid_values:
+        - "trustgrid-dev"
+        - "trustgrid-prod"
+
+  github_repo_url:
+    type: string
+    display_label: GitHub Repository URL
+    default: https://github.com/jakubcierlik/iac-private_cloud
+    description: |
+      URL of the GitHub repository containing the Terraform files.
+      Without trailing slash ('/').
+
+  release_tag:
+    type: string
+    display_label: Release Tag
+    default: "1.0.0"
+    description: Tag of the Terraform files release.    
+
+  certificate-private_key:
+    type: string
+    display_label: Certificate Private Key
+
+  certificate-ssc:
+    type: string
+    display_label: Certificate SSC
+
+  certificate-ca_bundle:
+    type: string
+    display_label: Certificate CA Bundle
+
+  aws_vpc_ssh_public_key_prod:
+    type: string
+    display_label: AWS VPC Public Key Prod
+
+  node_license-prod-01:
+    type: string
+    display_label: Node License - Prod 01
+
+  node_license-prod-02:
+    type: string
+    display_label: Node License - Prod 02
+
+
+node_templates:
+
+  terraform:
+    type: cloudify.nodes.terraform
+    properties:
+      resource_config:
+        use_existing_resource: false
+
+  trustgrid:
+    type: cloudify.nodes.terraform.Module
+    properties:
+      resource_config:
+        source:
+          location:
+            concat:
+              - { get_input: github_repo_url }
+              - "/archive/refs/tags/"
+              - { get_input: release_tag }
+              - ".zip"
+        source_path: { get_input: deployment_version }
+        variables:
+          certificate-private_key: { get_input: certificate-private_key }
+          certificate-ssc: { get_input: certificate-ssc }
+          certificate-ca_bundle: { get_input: certificate-ca_bundle }
+          aws_vpc_ssh_public_key_prod: { get_input: aws_vpc_ssh_public_key_prod }
+          node_license-prod-01: { get_input: node_license-prod-01 }
+          node_license-prod-02: { get_input: node_license-prod-02 }
+    relationships:
+      - target: terraform
+        type: cloudify.terraform.relationships.run_on_host

@@ -1,0 +1,464 @@
+---
+  - name: "Installing and configuring Crestron VC-4"
+    hosts: vc-4-servers
+    # hosts: all
+    vars:
+      - script_path: /home/vc4admin
+      - install_path: /opt/crestron
+    vars_prompt:
+      - name: crestron_user
+        prompt: "Enter your Crestron username"
+        private: no
+      - name: crestron_password
+        prompt: "Enter your Crestron password"
+        unsafe: yes
+        private: yes
+        #encrypt: sha512_crypt
+        confirm: yes
+        #salt_size: 7
+      - name: mariadb_password
+        prompt: "Enter the MariaDB root password"
+        unsafe: yes
+        private: yes
+        #encrypt: sha512_crypt
+        confirm: yes
+        #salt_size: 7
+      - name: force_install
+        prompt: "Do you wish to force VC-4 to (re)install? (y/n)"
+        private: no
+    tasks:
+
+    #- name: show facts
+    #  ansible.builtin.debug:
+    #    var: ansible_facts
+
+    - name: fail if not AlmaLinux 8.2+
+      ansible.builtin.fail:
+        msg: Not an approved linux distro / version
+      when:
+      - ansible_distribution != "AlmaLinux"
+      - ansible_distribution_version <= "8"
+    
+    - name: Set the hostname
+      ansible.builtin.hostname:
+        name: "{{ ansible_hostname }}"
+        use: systemd
+      when: inventory_hostname not in ['localhost','127.0.0.1']
+      
+    - name: Get all security updates
+      ansible.builtin.dnf:
+        security: yes
+        state: latest
+      become: true
+      register: securityupdates
+
+    - debug: var=securityupdates.stdout_lines
+
+    - name: Download and unzip the VC-4 installer
+      ansible.builtin.unarchive:
+        src:  ftp://{{crestron_user}}:{{crestron_password}}@ftp.crestron.com:/firmware/_files/vc-4/vc-4_4.0000.00007.zip
+        creates: "{{ script_path }}/vc4"
+        remote_src: yes
+        dest: "{{ script_path }}"
+      register: newVC4
+
+    - name: add Crestron repo 0
+      become: yes
+      command:
+        cmd: dnf config-manager --add-repo ./crestron.repo
+        chdir: "{{ script_path }}/vc4/"
+        creates: /etc/yum.repos.d/crestron.repo
+        warn: false
+
+    - name: add Crestron repo 1
+      become: yes
+      command:
+        cmd: dnf config-manager --add-repo ./crestron1.repo
+        chdir: "{{ script_path }}/vc4/"
+        creates: /etc/yum.repos.d/crestron1.repo
+        warn: false
+      
+    - name: Install generic deps to latest
+      become: yes
+      ansible.builtin.dnf:
+        state: latest
+        name:
+          - libstdc++
+          - make
+          - gcc
+          - yum
+          - unzip
+          - tar
+          - telnet
+          - glibc-devel.i686
+          - rsync
+          - policycoreutils-python-utils
+          - glibc-devel
+          - libstdc++.i686
+          - yajl-2.1.0-10.el8.i686
+          - libuuid.i686
+          - mariadb-server
+          - httpd
+          - mod_security
+          - net-tools
+          - net-snmp
+          - net-snmp-utils
+          - krb5-workstation 
+          - krb5-libs
+          - openldap-clients-2.4.46-11.el8_1.x86_64
+          - python3-virtualenv
+          - libcgroup-tools
+          - libxml2.i686
+          - python38
+          - python3-virtualenv # line 533 of installVC4.sh
+          - firewalld # just to ensure it's added and fully updated
+          - mod_ssl # line 24 of enableSecurity.sh
+          - mod_authnz_pam # line 38 of enableSecurity.sh
+          - expect # added to enable expect scripts
+      register: updatedeps
+
+    #- debug: var=updatedeps.stdout_lines
+
+    - name: Install Almalinux specific deps to latest
+      become: yes
+      when:
+      - ansible_distribution == "AlmaLinux"
+      - ansible_distribution_version >= "8"
+      ansible.builtin.dnf:
+        state: latest
+        name:
+          - openssl-devel-1.1.1c-15.el8.i686
+          - libcurl-7.61.1-12.el8.i686
+          - libatomic-8.3.*.i686
+          - libevent-devel-2.1.8-5.el8.i686
+          - net-snmp-libs-1:5.8-14.el8_2.1.i686
+          - net-snmp-agent-libs-1:5.8-14.el8_2.1.i686
+          - redis-5.0.3-2.module_el8.2.0+318+3d7e67ea.x86_64
+      register: updatedeps
+
+    - debug: var=updatedeps.stdout_lines
+
+    - name: Pip install system-wide modules
+      become: yes
+      ansible.builtin.pip:
+        name:
+        - PyMySQL==1.0.2 # Added in order to allow Ansible to manage the MariaDB root user
+        - pexpect==4.8.0 # Added in order to allow Ansible to perform expect scripting
+
+    - name: Pip install requirements
+      become: yes
+      ansible.builtin.pip:
+        virtualenv: "{{ install_path }}/virtualcontrol/virtualcontrolenv"
+        virtualenv_command: /usr/bin/virtualenv
+        virtualenv_python: /usr/bin/python3
+        name:
+        - alembic==0.9.9
+        - aniso8601==2.0.0
+        - certifi==2018.1.18
+        - chardet==3.0.4
+        - click==6.7
+        - eventlet==0.22.1
+        - Flask==0.12.2
+        - Flask-JWT==0.3.2
+        - Flask-RESTful==0.3.6
+        - Flask-SocketIO==2.9.4
+        - future==0.16.0
+        - greenlet==0.4.13
+        - grpcio==1.8.3
+        - grpcio-tools==1.8.3
+        - idna==2.6
+        - itsdangerous==0.24
+        - Jinja2==2.10
+        - macholib==1.9
+        - MarkupSafe==1.1
+        - pefile==2017.11.5
+        - protobuf==3.5.1
+        - pyasn1==0.4.2
+        - PyInstaller==3.3.1
+        - PyJWT==1.4.2
+        - PyMySQL==0.8.0
+        - pyparsing==2.0.3
+        - pysmb==1.1.22
+        - python-dateutil==2.7.2
+        - python-editor==1.0.3
+        - python-engineio==2.0.3
+        - python-socketio==1.8.4
+        - pytz==2017.3
+        - redis==2.10.6
+        - requests==2.18.4
+        - resources==0.0.1
+        - six==1.11.0
+        - SQLAlchemy==1.2.0
+        - SQLAlchemy_Utils==0.36.1
+        - urllib3==1.22
+        - virtualenv==15.1.0
+        - Werkzeug==0.14.1
+
+    - name: Make sure mariadb is running
+      become: yes
+      ansible.builtin.systemd:
+        name: mariadb
+        state: started
+        enabled: yes
+
+    - name: set up MariaDB root user & password
+      community.mysql.mysql_user:
+        name: root
+        login_user: root
+        check_implicit_admin: yes
+        password: "{{ mariadb_password }}"
+        state: present
+
+    - name: set up .cnf file for MariaDB
+      become: yes
+      ansible.builtin.template:
+        src: templates/mariadb.my.cnf.j2
+        dest: /home/vc4admin/.my.cnf
+    
+    - name: copy the installer expect script # line 41 of enableSecurity.sh and contents of httpd-auth
+      become: yes
+      ansible.builtin.template:
+        src: templates/installVC4.exp.j2
+        dest: "{{ script_path }}/vc4/installVC4.exp"
+        owner: "vc4admin"
+        mode: "0700"
+    
+    - name: install VC-4
+      become: yes
+      ansible.builtin.command:
+        cmd: expect ./installVC4.exp
+        chdir: "{{ script_path }}/vc4/"
+        #creates: /etc/systemd/system/virtualcontrol.service
+        warn: false
+      when: (newVC4.changed == true) or (force_install == 'y')
+      register: installvc4
+
+    # - name: Install / upgrade VC-4
+    #   ansible.builtin.expect: 
+    #     #creates: /etc/systemd/system/virtualcontrol.service
+    #     command: rpm -Uvh --oldpackage --replacepkgs virtualcontrol-4.0000.00007-1.noarch.rpm
+    #     chdir: "{{ script_path }}/vc4/"
+    #     timeout: 60
+    #     echo: no
+    #     responses:
+    #       "(.*)Are you migrating VC4 from another build?(.*): ": "n\r"
+    #       "(.*)>> ": "1\r"
+    #       "(.*)Installer has detected that Virtual Control was previously installed in that directory using(.*)Do you wish to reuse the username and database? [Y/N]": "Y\r"
+    #       "(.*)Press Enter To Continue With Default Value(.*)": "\r"
+    #       "(.*)Username:(.*)": "root\r"
+    #       "(.*)Please provide the password for root: ": "{{ mariadb_password }}\r"
+    #       "(.*)Please provide new password for the MariaDB Root user: ": "{{ mariadb_password }}\r"
+    #       "(.*)Please confirm the password for root: ": "{{ mariadb_password }}\r"
+    #       "(.*)Please provide a name for the database or press enter to accept the default(.*): ": "VirtualControl\r"
+    #       "(.*)Please provide the name for the  database's user account(.*): ": "virtualcontrol\r"
+    #       "(.*)Please provide a password for the virtualcontrol user or press enter to accept the default(.*): ": "\r"
+    #   register: installvc4
+    #   become: yes
+
+    - debug: var=installvc4.stdout_lines
+
+    - name: Add lines to snmp config
+      become: yes
+      ansible.builtin.blockinfile:
+        path: /etc/snmp/snmpd.conf
+        block: |
+          master agentx
+          agentXSocket tcp:localhost:705
+
+    - name: Add lines to sysctl config
+      become: yes
+      ansible.builtin.blockinfile:
+        path: /etc/sysctl.d/99-sysctl.conf
+        block: |
+          net.ipv4.tcp_keepalive_intvl=30
+          net.ipv4.tcp_keepalive_time=30
+          net.ipv4.tcp_retries2=8
+          net.core.wmem_max=10000000
+          net.unix.max_dgram_qlen=4096
+
+    - name: enable VC-4 logging
+      become: yes
+      ansible.builtin.copy:
+        src: "{{ install_path }}/virtualcontrol/samples/conf_files/50-default.conf"
+        dest: /etc/rsyslog.d/50-default.conf
+        remote_src: yes
+
+    - name: enable the device resolution table
+      become: yes
+      ansible.builtin.copy:
+        src: "{{ install_path }}/virtualcontrol/samples/deviceResolution/device_resolution.cfg"
+        dest: "{{ install_path }}/virtualcontrol/conf/device_resolution.cfg"
+        remote_src: yes
+
+    - name: create webadmins group
+      become: yes
+      ansible.builtin.group:
+        name: webadmins
+        state: present
+
+    - name: create webusers group
+      become: yes
+      ansible.builtin.group:
+        name: webusers
+        state: present
+
+    - name: create webadmin user
+      become: yes
+      ansible.builtin.user:
+        name: webadmin
+        group: webadmins
+        create_home: no
+        password: $6$mysecretsalt$nAzeYR.JF4J7J.MILeF9EibqdL3TGZs48GxMIxiSCSmUzj2Sn2CDhCU/NihWMwn9a1fVvUc6kim4Kwcp7fnrd0
+    
+    - name: create webuser user
+      become: yes
+      ansible.builtin.user:
+        name: webuser
+        group: webusers
+        create_home: no
+        password: $6$mysecretsalt$nAzeYR.JF4J7J.MILeF9EibqdL3TGZs48GxMIxiSCSmUzj2Sn2CDhCU/NihWMwn9a1fVvUc6kim4Kwcp7fnrd0
+
+    - name: Make sure firewalld is running
+      become: yes
+      ansible.builtin.systemd:
+        name: firewalld
+        state: started
+        enabled: yes
+
+    - name: enable https
+      vars:
+        ansible_python_interpreter: /usr/bin/python3
+      become: yes
+      ansible.posix.firewalld:
+        service: https
+        zone: public
+        permanent: yes
+        state: enabled
+    
+    - name: uncomment 55-authnz_pam.conf # line 39 of enableSecurity.sh
+      become: yes
+      ansible.builtin.replace:
+        path: /etc/httpd/conf.modules.d/55-authnz_pam.conf
+        regexp: '(#\s)'
+
+    - name: create pam login file for settings page
+      become: yes
+      ansible.builtin.blockinfile:
+        path: /etc/connect.webpage.settings.groups.allowed
+        block: |
+          admins
+          webadmins
+        create: yes
+
+    - name: create pam login file for status page
+      become: yes
+      ansible.builtin.blockinfile:
+        path: /etc/connect.webpage.status.groups.allowed
+        block: |
+          admins
+          webadmins
+          webusers
+        create: yes
+
+    - name: configure httpd-auth-settings # line 41 of enableSecurity.sh and contents of httpd-auth
+      become: yes
+      ansible.builtin.template:
+        src: templates/httpd-auth-settings.j2
+        dest: /etc/pam.d/httpd-auth-settings
+
+    - name: configure httpd-auth-status # line 41 of enableSecurity.sh and contents of httpd-auth
+      become: yes
+      ansible.builtin.template:
+        src: templates/httpd-auth-status.j2
+        dest: /etc/pam.d/httpd-auth-status
+
+    - name: set up permissions for /etc/shadow # line 43 in enableSecurity.sh
+      become: yes
+      ansible.builtin.file:
+        path: /etc/shadow
+        group: apache
+        mode: 440
+
+    - name: set httpd_mod_auth_pam flag cmd
+      become: yes
+      ansible.builtin.shell: >
+        (getsebool httpd_mod_auth_pam \
+          | grep -q on \
+          && echo -n ENALBED) \
+        || (sudo setsebool -P httpd_mod_auth_pam 1 \
+          && echo -n CHANGED)
+      register: sebool
+      changed_when: sebool.stdout == 'CHANGED'
+
+    - name: overwrite httpd.conf with template
+      become: yes
+      ansible.builtin.template:
+        src: templates/httpd.conf.j2
+        dest: /etc/httpd/conf/httpd.conf
+
+    - name: overwrite ssl.conf with template
+      become: yes
+      ansible.builtin.template:
+        src: templates/ssl.conf.j2
+        dest: /etc/httpd/conf.d/ssl.conf
+
+    - name: overwrite crestron.conf with template
+      become: yes
+      ansible.builtin.template:
+        src: templates/crestron.conf.j2
+        dest: /etc/httpd/conf.modules.d/crestron.conf
+
+    - name: Reboot the machine
+      ansible.builtin.reboot:
+        reboot_timeout: 300
+        connect_timeout: 300
+      become: yes
+
+    - name: Make sure rsyslog is running
+      become: yes
+      ansible.builtin.systemd:
+        name: rsyslog
+        state: started
+        enabled: yes
+
+    - name: Make sure virtualcontrol is running
+      become: yes
+      ansible.builtin.systemd:
+        name: virtualcontrol
+        state: started
+        enabled: yes
+
+    - name: Make sure snmpd is running
+      become: yes
+      ansible.builtin.systemd:
+        name: snmpd
+        state: started
+        enabled: yes
+
+    - name: Make sure httpd is running
+      become: yes
+      ansible.builtin.systemd:
+        name: httpd
+        state: started
+        enabled: yes
+
+    - name: Make sure mariadb is running
+      become: yes
+      ansible.builtin.systemd:
+        name: mariadb
+        state: started
+        enabled: yes
+
+    - name: Make sure redis is running
+      become: yes
+      ansible.builtin.systemd:
+        name: redis
+        state: started
+        enabled: yes
+
+    - name: Make sure firewalld is running
+      become: yes
+      ansible.builtin.systemd:
+        name: firewalld
+        state: started
+        enabled: yes
