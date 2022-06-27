@@ -30,26 +30,75 @@ inputs:
   certificate-private_key:
     type: string
     display_label: Certificate Private Key
+    default: { get_secret: certificate-private_key }
 
   certificate-ssc:
     type: string
     display_label: Certificate SSC
+    default: { get_secret: certificate-ssc }
 
   certificate-ca_bundle:
     type: string
     display_label: Certificate CA Bundle
+    default: { get_secret: certificate-ca_bundle }
 
   aws_vpc_ssh_public_key_prod:
     type: string
     display_label: AWS VPC Public Key Prod
+    description: >
+      SSH Public Key for VPC in AWS. Valid only when 'trustgrid-prod' 
+      deployment version chosen. Otherwise ignored.
+    default: { get_secret: aws_vpc_ssh_public_key_prod }
+
+  aws_vpc_ssh_public_key_dev:
+    type: string
+    display_label: AWS VPC Public Key Dev
+    description: >
+      SSH Public Key for VPC in AWS. Valid only when 'trustgrid-dev' 
+      deployment version chosen. Otherwise ignored.
+    default: { get_secret: aws_vpc_ssh_public_key_dev }
 
   node_license-prod-01:
     type: string
     display_label: Node License - Prod 01
+    description: >
+      Node license for production node. Valid only when 'trustgrid-prod' 
+      deployment version chosen. Otherwise ignored.
+    default: { get_secret: node_license-prod }
 
   node_license-prod-02:
     type: string
     display_label: Node License - Prod 02
+    description: >
+      Node license for production node. Valid only when 'trustgrid-prod' 
+      deployment version chosen. Otherwise ignored.
+    default: { get_secret: node_license-prod }
+
+  node_license-dev-01:
+    type: string
+    display_label: Node License - Dev 01
+    description: >
+      Node license for development node. Valid only when 'trustgrid-dev' 
+      deployment version chosen. Otherwise ignored.
+    default: { get_secret: node_license-dev }
+
+  node_license-dev-02:
+    type: string
+    display_label: Node License - Dev 02
+    description: >
+      Node license for development node. Valid only when 'trustgrid-dev' 
+      deployment version chosen. Otherwise ignored.
+    default: { get_secret: node_license-dev }
+
+  aws_access_key_id:
+    type: string
+    hidden: true
+    default: { get_secret: aws_access_key_id }
+
+  aws_secret_access_key:
+    type: string
+    hidden: true
+    default: { get_secret: aws_secret_access_key }
 
 
 node_templates:
@@ -67,13 +116,20 @@ node_templates:
         source:
           location: { get_input: terraform_zip_url }
         source_path: { get_input: deployment_version }
+        environment_variables:
+          AWS_ACCESS_KEY_ID: { get_input: aws_access_key_id }
+          AWS_SECRET_ACCESS_KEY: { get_input: aws_secret_access_key }
+          AWS_DEFAULT_REGION: "us-west-2"
         variables:
           certificate-private_key: { get_input: certificate-private_key }
           certificate-ssc: { get_input: certificate-ssc }
           certificate-ca_bundle: { get_input: certificate-ca_bundle }
           aws_vpc_ssh_public_key_prod: { get_input: aws_vpc_ssh_public_key_prod }
+          aws_vpc_ssh_public_key_dev: { get_input: aws_vpc_ssh_public_key_dev }
           node_license-prod-01: { get_input: node_license-prod-01 }
           node_license-prod-02: { get_input: node_license-prod-02 }
+          node_license-dev-01: { get_input: node_license-dev-01 }
+          node_license-dev-02: { get_input: node_license-dev-02 }
     relationships:
       - target: terraform
         type: cloudify.terraform.relationships.run_on_host
