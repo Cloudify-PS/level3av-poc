@@ -10,6 +10,30 @@ imports:
 
 inputs:
 
+  crestron_user:
+    type: string
+    display_label: Crestron Username
+    default: { get_secret: crestron_username }
+
+  crestron_password:
+    type: string
+    display_label: Crestron Password
+    default: { get_secret: crestron_password }
+
+  mariadb_password:
+    type: string
+    display_label: MariaDB Password
+    default: m4ri4dbp4ssw0rd
+
+  force_install:
+    type: string
+    display_label: Force Install
+    default: "n"
+    constraints:
+      - valid_values:
+          - "y"
+          - "n"
+
   aws_region:
     type: string
     display_label: AWS Region
@@ -51,6 +75,11 @@ inputs:
     type: string
     display_label: VPC ID
     description: Resource ID of VPC to be used
+
+  subnet_id:
+    type: string
+    display_label: Subnet ID
+    description: Subnet to deploy VC4 instance into
 
   ssh_ips:
     type: list
@@ -107,11 +136,6 @@ inputs:
       The AMI ID to use for the server deployment. Defaults to the
       AlmaLinux OS 8.6.20220513 image for the selected region.
     default: { get_input: [ image_id, { get_input: aws_region } ] }
-
-  subnet_id:
-    type: string
-    display_label: Subnet ID
-    description: Subnet to deploy VC4 instance into
 
 dsl_definitions:
   client_config: &client_config
@@ -215,6 +239,8 @@ node_templates:
               - { get_attribute: [ssh_key, public_key_export] }
             primary_group: admins
             groups: users, admin, webadmins
+        packages:
+         - unzip
         final_message: "WOOOOOOOOOOOOOOOO - all done nerds!!"
     relationships:
       - type: cloudify.relationships.depends_on
@@ -225,13 +251,13 @@ node_templates:
     properties:
       client_config: *client_config
       agent_config:
-        install_method: init_script
+        install_method: none
         user: vc4admin
         key: { get_attribute: [ ssh_key, private_key_export ] }
-        network: external
-        extra:
-          distro: centos
-          distro_codename: 8
+        # network: external
+        # extra:
+        #   distro: centos
+        #   distro_codename: 8
       resource_config:
         InstanceType: { get_input: instance_type }
         ImageId: { get_input: ami_id }
@@ -259,6 +285,17 @@ node_templates:
           inputs:
             site_yaml_path: crestron-vc4/vc-4-master/installvc4.yml
             sources: { get_attribute: [ SELF, sources ] }
+            galaxy_collections:
+              - community.mysql
+              - ansible.posix
+            run_data:
+              crestron_user: { get_input: crestron_user }
+              crestron_password: { get_input: crestron_password }
+              mariadb_password: { get_input: mariadb_password }
+              force_install: { get_input: force_install }
+            sensitive_keys:
+              - crestron_password
+              - mariadb_password
     relationships:
       - type: cloudify.ansible.relationships.connected_to_host
         target: vc4_server

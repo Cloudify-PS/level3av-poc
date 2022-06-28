@@ -1,31 +1,36 @@
 ---
   - name: "Installing and configuring Crestron VC-4"
-    hosts: vc-4-servers
-    # hosts: all
+    # hosts: vc-4-servers
+    hosts: all
     vars:
       - script_path: /home/vc4admin
       - install_path: /opt/crestron
-    vars_prompt:
-      - name: crestron_user
-        prompt: "Enter your Crestron username"
-        private: no
-      - name: crestron_password
-        prompt: "Enter your Crestron password"
-        unsafe: yes
-        private: yes
-        #encrypt: sha512_crypt
-        confirm: yes
-        #salt_size: 7
-      - name: mariadb_password
-        prompt: "Enter the MariaDB root password"
-        unsafe: yes
-        private: yes
-        #encrypt: sha512_crypt
-        confirm: yes
-        #salt_size: 7
-      - name: force_install
-        prompt: "Do you wish to force VC-4 to (re)install? (y/n)"
-        private: no
+
+    # vars_prompt section is now commented out as Cloudify automates
+    # inputs propagation. Those variables are taken as inputs into the
+    # blueprint and passed to the Ansible Playbook during runtime.
+
+    # vars_prompt:
+    #   - name: crestron_user
+    #     prompt: "Enter your Crestron username"
+    #     private: no
+    #   - name: crestron_password
+    #     prompt: "Enter your Crestron password"
+    #     unsafe: yes
+    #     private: yes
+    #     #encrypt: sha512_crypt
+    #     confirm: yes
+    #     #salt_size: 7
+    #   - name: mariadb_password
+    #     prompt: "Enter the MariaDB root password"
+    #     unsafe: yes
+    #     private: yes
+    #     #encrypt: sha512_crypt
+    #     confirm: yes
+    #     #salt_size: 7
+    #   - name: force_install
+    #     prompt: "Do you wish to force VC-4 to (re)install? (y/n)"
+    #     private: no
     tasks:
 
     #- name: show facts
@@ -225,7 +230,10 @@
     
     - name: install VC-4
       become: yes
-      ansible.builtin.command:
+      # ansible.builtin.command not supported by current Ansible version
+      # Using simple command.
+      # ansible.builtin.command:
+      command:
         cmd: expect ./installVC4.exp
         chdir: "{{ script_path }}/vc4/"
         #creates: /etc/systemd/system/virtualcontrol.service
@@ -381,7 +389,8 @@
 
     - name: set httpd_mod_auth_pam flag cmd
       become: yes
-      ansible.builtin.shell: >
+      # ansible.builtin.shell: >
+      shell: >
         (getsebool httpd_mod_auth_pam \
           | grep -q on \
           && echo -n ENALBED) \
@@ -389,6 +398,16 @@
           && echo -n CHANGED)
       register: sebool
       changed_when: sebool.stdout == 'CHANGED'
+
+    # ERROR! this task 'ansible.builtin.shell' has extra params, which is only
+    # allowed in the following modules: group_by, include, win_shell, include_vars,
+    # include_role, shell, script, meta, import_role, command, import_tasks,
+    # add_host, win_command, raw, include_tasks, set_fact
+    # The error appears to be in '/tmp/tmpyultrrhp/playbook/installvc4.yml': line 384, column 7, but may
+    # be elsewhere in the file depending on the exact syntax problem.
+    # The offending line appears to be:
+    #     - name: set httpd_mod_auth_pam flag cmd
+    #       ^ here
 
     - name: overwrite httpd.conf with template
       become: yes
