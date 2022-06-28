@@ -1,0 +1,103 @@
+tosca_definitions_version: cloudify_dsl_1_3
+
+imports:
+  - http://www.getcloudify.org/spec/cloudify/5.0.0/types.yaml
+  - plugin:cloudify-utilities-plugin
+
+inputs:
+
+  rest_endpoint:
+    description: >
+      REST API endpoint
+    default: "jsonplaceholder.typicode.com"
+
+  user_id:
+    description: user_id
+    type: string
+    display_label: id of user to get data
+    default: 10
+
+  new_user:
+    description: User
+    type: string
+    display_label: User
+    default: user1
+
+  new_user_name:
+    description: User name
+    type: string
+    display_label: New user name
+    default: username1
+
+  new_user_email:
+    description: email
+    type: string
+    display_label: New email
+    default: username1@cloudify.co
+
+node_templates:
+
+  user:
+    type: cloudify.rest.Requests
+    properties:
+      hosts:
+      - { get_input: rest_endpoint }
+      port: 443
+      ssl: true
+      verify: false
+    interfaces:
+      cloudify.interfaces.lifecycle:
+        start:
+          inputs:
+            save_path: user-details
+            template_file: templates/get_user_information.yaml
+            params:
+              USER_ID: { get_input: user_id }
+        stop:
+          inputs:
+            save_path: users-delete
+            template_file: templates/delete_user.yaml
+            params:
+              USER_ID: { get_input: user_id }
+
+  update_user:
+    type: cloudify.rest.Requests
+    properties:
+      hosts:
+      - { get_input: rest_endpoint }
+      port: 443
+      ssl: true
+      verify: false
+    interfaces:
+      cloudify.interfaces.lifecycle:
+        start:
+          inputs:
+            save_path: users-update
+            template_file: templates/put_new_user_data.yaml
+            params:
+              USER_ID: { get_input: user_id }
+              NEW_USER: { get_input: new_user }
+              NEW_USER_NAME: { get_input: new_user_name }
+              NEW_USER_EMAIL: { get_input: new_user_email }
+    relationships:
+    - type: cloudify.relationships.depends_on
+      target: user
+
+  users:
+    type: cloudify.rest.Requests
+    properties:
+      hosts:
+      - { get_input: rest_endpoint }
+      port: 443
+      ssl: true
+      verify: false
+    interfaces:
+      cloudify.interfaces.lifecycle:
+        start:
+          inputs:
+            save_path: users-details
+            template_file: templates/get_users_information.yaml
+            interfaces:
+    relationships:
+    - type: cloudify.relationships.depends_on
+      target: update_user

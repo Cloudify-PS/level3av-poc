@@ -21,6 +21,37 @@ inputs:
         - "trustgrid-dev"
         - "trustgrid-prod"
 
+  aws_region:
+    type: string
+    display_label: AWS Region
+    default: "us-west-2"
+    description: AWS Region to deploy the infrastructure into.
+    constraints:
+      - valid_values:
+        - us-east-1
+        - us-east-2
+        - us-west-1
+        - us-west-2
+        - eu-central-1
+        - eu-west-1
+        - eu-west-2
+        - eu-south-1
+        - eu-west-3
+        - eu-north-1
+        - af-south-1
+        - ap-east-1
+        - ap-south-1
+        - ap-northeast-3
+        - ap-northeast-2
+        - ap-southeast-1
+        - ap-southeast-2
+        - ap-northeast-1
+        - ca-central-1
+        - cn-north-1
+        - cn-northwest-1
+        - me-south-1
+        - sa-east-1
+
   terraform_zip_url:
     type: string
     display_label: Terraform ZIP URL
@@ -109,6 +140,22 @@ node_templates:
       resource_config:
         use_existing_resource: false
 
+  # terraform_login_token:
+  #   type: cloudify.nodes.Root
+  #   interfaces:
+  #     cloudify.interfaces.lifecycle:
+  #       start:
+  #         implementation: trustgrid/scripts/store_terraform_token.sh
+  #         executor: central_deployment_agent
+  #         inputs:
+  #           terraform_token: { get_secret: terraform_token }
+  #       stop:
+  #         implementation: trustgrid/scripts/remove_terraform_token.sh
+  #         executor: central_deployment_agent
+  #   relationships:
+  #     - type: cloudify.relationships.depends_on
+  #       target: terraform
+
   trustgrid:
     type: cloudify.nodes.terraform.Module
     properties:
@@ -119,8 +166,9 @@ node_templates:
         environment_variables:
           AWS_ACCESS_KEY_ID: { get_input: aws_access_key_id }
           AWS_SECRET_ACCESS_KEY: { get_input: aws_secret_access_key }
-          AWS_DEFAULT_REGION: "us-west-2"
+          AWS_DEFAULT_REGION: { get_input: aws_region }
         variables:
+          aws_region: { get_input: aws_region }
           certificate-private_key: { get_input: certificate-private_key }
           certificate-ssc: { get_input: certificate-ssc }
           certificate-ca_bundle: { get_input: certificate-ca_bundle }
@@ -133,3 +181,27 @@ node_templates:
     relationships:
       - target: terraform
         type: cloudify.terraform.relationships.run_on_host
+      # - target: terraform_login_token
+      #   type: cloudify.relationships.depends_on
+
+  # trustgrid_api:
+  #   type: cloudify.nodes.ServiceComponent
+  #   properties:
+  #     resource_config:
+  #       blueprint:
+  #         external_resource: false
+  #         id: trustgrid_api
+  #         blueprint_archive: https://github.com/Cloudify-PS/level3av-poc/archive/refs/heads/main.zip
+  #         main_file_name: trustgrid_api.yaml
+  #       deployment:
+  #         id: trustgrid_api
+  #         auto_inc_suffix: false
+  #         inputs:
+  #           rest_endpoint: { get_input: rest_endpoint }
+  #           user_id: { get_input: user_id }
+  #           new_user: { get_input: new_user }
+  #           new_user_name: { get_input: new_user_name }
+  #           new_user_email: { get_input: new_user_email }
+  #   relationships:
+  #     - type: cloudify.relationships.depends_on
+  #       target: trustgrid

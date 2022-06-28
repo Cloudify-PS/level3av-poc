@@ -19,3 +19,11 @@ The main deployment exposes the following outputs:
 - _rds_endpoint_ - RDS endpoint address
 - _eks_endpoint_ - EKS endpoint address
 - _zabbix_endpoint_ - the HTTP endpoint for accessing the Zabbix web interface
+
+## Crestron VC-4
+A deployment of Crestron VC-4 instance configured using provided Ansible Playbook.  
+More details in the [ReadMe](crestron-vc4/README.md).  
+
+## Trustgrid
+A deployment of Trustgrid infrastructure declared in the Terraform files.  
+More details in the [ReadMe](trustgrid/README.md).  

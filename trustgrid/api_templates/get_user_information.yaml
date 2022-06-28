@@ -1,0 +1,11 @@
+rest_calls:
+  - path: "/users/{{ USER_ID }}"
+    method: GET
+    headers:
+      Content-type: application/json
+    payload:
+    response_format: json
+    recoverable_codes: [400]
+    response_translation: [user]
+    response_expectation:
+        - ['id', "{{ USER_ID }}"]

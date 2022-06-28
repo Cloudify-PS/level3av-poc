@@ -1,0 +1,13 @@
+rest_calls:
+  - path: "/users/{{ USER_ID }}"
+    method: PUT
+    headers:
+      Content-type: application/json
+    payload:
+      name: '{{ NEW_USER }}'
+      username: '{{ NEW_USER_NAME }}'
+      email: '{{ NEW_USER_EMAIL }}'
+    payload:
+    response_format: json
+    recoverable_codes: [400]
+    response_translation: [user]
