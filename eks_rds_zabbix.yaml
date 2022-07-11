@@ -77,6 +77,30 @@ inputs:
     display_label: Secondary Public Subnet ID
     description: The ID of secondary public subnet of VPC
 
+  primary_public_subnet_cidr:
+    type: string
+    display_label: Primary public subnet CIDR
+    description: The CIDR network for the primary public subnet
+    default: "10.0.1.0/24"
+
+  secondary_public_subnet_cidr:
+    type: string
+    display_label: Secondary public subnet CIDR
+    description: The CIDR network for the secondary public subnet
+    default: "10.0.2.0/24"
+
+  primary_private_subnet_cidr:
+    type: string
+    display_label: Primary private subnet CIDR
+    description: The CIDR network for the primary private subnet
+    default: "10.0.11.0/24"
+
+  secondary_private_subnet_cidr:
+    type: string
+    display_label: Secondary private subnet CIDR
+    description: The CIDR network for the secondary private subnet
+    default: "10.0.12.0/24"
+
   gateway_management_security_group_id:
     type: string
     display_label: Gateway Management Security Group ID
