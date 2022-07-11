@@ -267,7 +267,7 @@ node_templates:
             database_endpoint: { get_capability: [{ get_attribute: [rds, deployment, id] }, endpoint_address] }
             kubernetes_endpoint: { get_capability: [{ get_attribute: [eks, deployment, id] }, endpoint] }
             kubernetes_token: { get_capability: [{ get_attribute: [eks, deployment, id] }, token] }
-            kubernetes_ca_secret: { get_capability: [{ get_attribute: [eks, deployment, id] }, ca_certificate] }
+            kubernetes_ca: { get_capability: [{ get_attribute: [eks, deployment, id] }, ca_certificate] }
     relationships:
       - type: cloudify.relationships.depends_on
         target: eks

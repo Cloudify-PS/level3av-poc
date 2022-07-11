@@ -43,10 +43,10 @@ inputs:
     display_label: Kubernetes API Token
     description: Service account token for accessing Kubernetes API
 
-  kubernetes_ca_secret:
+  kubernetes_ca:
     type: string
-    display_label: Kubernetes Certificate Authority Secret Name
-    description: Secret name of PEM encoded CA used to access Kubernetes API
+    display_label: Kubernetes Certificate Authority
+    description: The value of PEM encoded CA used to access Kubernetes API
 
 node_templates:
 
@@ -75,7 +75,7 @@ node_templates:
           api_options:
             host: { get_input: kubernetes_endpoint }
             api_key: { get_input: kubernetes_token }
-            ssl_ca_cert: { get_input: kubernetes_ca_secret }
+            ssl_ca_cert: { get_input: kubernetes_ca }
       resource_config:
         name: zabbix
         chart: celtic/zabbix
@@ -113,7 +113,7 @@ node_templates:
           api_options:
             host: { get_input: kubernetes_endpoint }
             api_key: { get_input: kubernetes_token }
-            ssl_ca_cert: { get_input: kubernetes_ca_secret }
+            ssl_ca_cert: { get_input: kubernetes_ca }
       use_external_resource: true
       definition:
         apiVersion: v1
